@@ -1,2 +1,0 @@
-const SUPABASE_URL = 'https://zhgxrjdcefanlgvfrgji.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpoZ3hyamRjZWZhbmxndmZyZ2ppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MDQ4NDUsImV4cCI6MjA4OTE4MDg0NX0.mHqkvSB2464qd0NBtY6aHw7Kruv2SrX6XF6kblZ3S2k';
