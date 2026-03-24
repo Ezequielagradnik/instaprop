@@ -47,6 +47,11 @@ export default function AuthPage() {
     const result = await signUp(email, password, name, isSeller ? 'seller' : 'buyer');
     setLoading(false);
     if ('error' in result && result.error) { setError(result.error); return; }
+    if ('needsConfirmation' in result && result.needsConfirmation) {
+      setError('📧 Revisá tu email para confirmar la cuenta y después iniciá sesión.');
+      setTab('login');
+      return;
+    }
     if ('user' in result && result.user) {
       localStorage.setItem('ip_u', JSON.stringify({
         id: result.user.id,

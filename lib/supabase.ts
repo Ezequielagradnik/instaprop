@@ -13,11 +13,12 @@ export async function signUp(email: string, password: string, name: string, role
   const { data, error } = await supabase.auth.signUp({ email, password });
   if (error || !data.user) return { error: error?.message ?? 'Error al registrarse' };
 
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .insert({ id: data.user.id, name, email, role });
+  // Insert profile regardless of email confirmation status
+  await supabase.from('profiles').insert({ id: data.user.id, name, email, role });
 
-  if (profileError) return { error: profileError.message };
+  // If no session → email confirmation required
+  if (!data.session) return { needsConfirmation: true };
+
   return { user: data.user, name, role };
 }
 
@@ -94,7 +95,7 @@ const FALLBACK_PROPS: Property[] = [
     type: '2amb', bedrooms: 2, area_m2: 58, badge: 'Nuevo', match_score: 94,
     description: 'Hermoso depto a estrenar en Palermo Hollywood. Piso 8 con vista abierta, balcón al frente, luminoso todo el día.',
     tags: ['2 amb', '58 m²', 'Balcón', 'Luminoso', 'A estrenar'],
-    image_url: 'https://images.unsplash.com/photo-1600596542815-0c96b9b8b33c?w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1600596542815-0c96b9b8b33c?auto=format&fit=crop&w=1080&q=90',
     gradient: 'linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)', likes: 23, featured: true,
   },
   {
@@ -103,7 +104,7 @@ const FALLBACK_PROPS: Property[] = [
     type: '3amb', bedrooms: 3, area_m2: 85, badge: 'Destacado', match_score: 87,
     description: 'Amplio 3 ambientes en Belgrano R con terraza propia y cochera cubierta.',
     tags: ['3 amb', '85 m²', 'Cochera', 'Terraza', 'SUM'],
-    image_url: 'https://images.unsplash.com/photo-1600607687920-4e03d67d8438?w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1600607687920-4e03d67d8438?auto=format&fit=crop&w=1080&q=90',
     gradient: 'linear-gradient(135deg,#2d132c,#801336,#c72c41)', likes: 45, featured: true,
   },
   {
@@ -112,7 +113,7 @@ const FALLBACK_PROPS: Property[] = [
     type: 'monoambiente', bedrooms: 1, area_m2: 32, badge: 'Oportunidad', match_score: 78,
     description: 'Monoambiente reciclado a nuevo en Villa Crespo. Ideal inversión o primera vivienda.',
     tags: ['Monoamb', '32 m²', 'Reciclado', 'A estrenar'],
-    image_url: 'https://images.unsplash.com/photo-1554995207-c18c203602cb?w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1554995207-c18c203602cb?auto=format&fit=crop&w=1080&q=90',
     gradient: 'linear-gradient(135deg,#0d324d,#7f5a83,#a188a6)', likes: 12, featured: false,
   },
   {
@@ -121,7 +122,7 @@ const FALLBACK_PROPS: Property[] = [
     type: 'casa', bedrooms: 4, area_m2: 180, badge: 'Premium', match_score: 71,
     description: 'Espectacular casa en Núñez con jardín y pileta. 4 ambientes, cocina gourmet.',
     tags: ['4 amb', '180 m²', 'Jardín', 'Pileta', 'Quincho'],
-    image_url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1080&q=90',
     gradient: 'linear-gradient(135deg,#1b262c,#0f4c75,#3282b8)', likes: 67, featured: true,
   },
   {
@@ -130,7 +131,7 @@ const FALLBACK_PROPS: Property[] = [
     type: '2amb', bedrooms: 2, area_m2: 64, badge: 'Popular', match_score: 91,
     description: '2 ambientes con vista panorámica en Recoleta. Piso 14 en edificio icónico.',
     tags: ['2 amb', '64 m²', 'Vista panorámica', 'Piso alto'],
-    image_url: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1080&q=90',
     gradient: 'linear-gradient(135deg,#2b2e4a,#903749,#e84545)', likes: 89, featured: true,
   },
 ];
