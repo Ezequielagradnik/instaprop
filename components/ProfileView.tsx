@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { User } from '../types';
+import { insertProperty } from '../lib/supabase';
 
 interface Props {
   user: User;
@@ -20,6 +21,90 @@ const FEATURES = ['Balcón', 'Terraza', 'Cochera', 'Pileta', 'Luminoso', 'A estr
 function Toggle({ defaultOn = true }: { defaultOn?: boolean }) {
   const [on, setOn] = useState(defaultOn);
   return <div className={`tgl ${on ? 'on' : ''}`} onClick={() => setOn(v => !v)} />;
+}
+
+const PROP_TYPES = [
+  { val: 'monoambiente', label: 'Monoambiente' },
+  { val: '2amb', label: '2 Ambientes' },
+  { val: '3amb', label: '3 Ambientes' },
+  { val: 'casa', label: 'Casa' },
+  { val: 'ph', label: 'PH' },
+  { val: 'loft', label: 'Loft' },
+];
+
+function UploadPropertyForm() {
+  const [address, setAddress] = useState('');
+  const [neighborhood, setNeighborhood] = useState('Palermo');
+  const [propType, setPropType] = useState('2amb');
+  const [price, setPrice] = useState('');
+  const [bedrooms, setBedrooms] = useState('');
+  const [area, setArea] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  async function submit() {
+    if (!address || !price) { setMsg('❌ Dirección y precio son obligatorios'); return; }
+    const priceNum = parseInt(price.replace(/\D/g, ''));
+    if (isNaN(priceNum) || priceNum <= 0) { setMsg('❌ Precio inválido'); return; }
+
+    setLoading(true); setMsg('');
+    const result = await insertProperty({
+      address,
+      neighborhood,
+      type: propType as 'monoambiente' | '2amb' | '3amb' | 'casa' | 'ph' | 'loft',
+      price_usd: priceNum,
+      price_display: 'USD ' + priceNum.toLocaleString('es-AR'),
+      bedrooms: bedrooms ? parseInt(bedrooms) : null,
+      area_m2: area ? parseInt(area) : null,
+      description,
+      image_url: imageUrl || null,
+      gradient: 'linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)',
+      badge: 'Nuevo',
+      match_score: 80,
+      tags: [propType, area ? area + ' m²' : '', neighborhood].filter(Boolean),
+      featured: false,
+    });
+    setLoading(false);
+
+    if ('error' in result && result.error) {
+      setMsg('❌ ' + result.error);
+    } else {
+      setMsg('✅ Propiedad publicada correctamente');
+      setAddress(''); setPrice(''); setBedrooms(''); setArea(''); setDescription(''); setImageUrl('');
+    }
+  }
+
+  return (
+    <div className="ss">
+      <div className="ss-t">🏠 Publicar propiedad</div>
+      <div className="up-form">
+        {msg && <div className={`up-msg ${msg.startsWith('✅') ? 'ok' : 'err'}`}>{msg}</div>}
+        <input className="inp" placeholder="Dirección (ej: Thames 1842, Palermo)" value={address} onChange={e => setAddress(e.target.value)} />
+        <div className="up-row">
+          <select className="inp" value={neighborhood} onChange={e => setNeighborhood(e.target.value)}>
+            {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+          </select>
+          <select className="inp" value={propType} onChange={e => setPropType(e.target.value)}>
+            {PROP_TYPES.map(t => <option key={t.val} value={t.val}>{t.label}</option>)}
+          </select>
+        </div>
+        <div className="up-row">
+          <input className="inp" placeholder="Precio USD (ej: 185000)" value={price} onChange={e => setPrice(e.target.value)} />
+          <input className="inp" placeholder="Ambientes (ej: 2)" value={bedrooms} onChange={e => setBedrooms(e.target.value)} type="number" min="1" />
+        </div>
+        <div className="up-row">
+          <input className="inp" placeholder="Superficie m² (ej: 58)" value={area} onChange={e => setArea(e.target.value)} type="number" min="1" />
+          <input className="inp" placeholder="URL imagen (opcional)" value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
+        </div>
+        <textarea className="inp up-desc" placeholder="Descripción de la propiedad..." value={description} onChange={e => setDescription(e.target.value)} rows={3} />
+        <button className="btn-p" style={{ width: '100%' }} onClick={submit} disabled={loading}>
+          {loading ? 'Publicando...' : '🚀 Publicar propiedad'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function ProfileView({ user, viewed, likedCount, savedCount, onLogout, onSavePrefs }: Props) {
@@ -46,7 +131,10 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, onLo
         <div className="pav">{ini}</div>
         <div className="pnm">{user.name}</div>
         <div className="pem">{user.email}</div>
+        {user.role === 'seller' && <div className="prole">🏢 Vendedor / Inmobiliaria</div>}
       </div>
+
+      {user.role === 'seller' && <UploadPropertyForm />}
 
       <div className="ss">
         <div className="ss-t">🎯 Preferencias de búsqueda</div>

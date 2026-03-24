@@ -62,9 +62,8 @@ export default function Feed({ properties, currentIndex, liked, saved, onNext, o
       >
         {properties.map((prop, i) => {
           const cls = i === currentIndex ? 'cur' : i > currentIndex ? 'blw' : 'abv';
-          const bgStyle = prop.image_url
-            ? { backgroundImage: `url('${prop.image_url}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
-            : { background: prop.gradient };
+          const imgUrl = prop.image_url || `https://picsum.photos/seed/prop${prop.id}/800/1200`;
+          const bgStyle = { backgroundImage: `url('${imgUrl}')`, backgroundSize: 'cover', backgroundPosition: 'center' };
 
           return (
             <div key={prop.id} className={`fc ${cls}`}>

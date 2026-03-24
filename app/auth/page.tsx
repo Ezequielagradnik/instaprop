@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { signIn, signUp } from '../../lib/supabase';
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24">
@@ -18,20 +19,43 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [isSeller, setIsSeller] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  function login() {
-    const e = email || 'usuario@instaprop.com';
-    const user = { name: e.split('@')[0], email: e };
-    localStorage.setItem('ip_u', JSON.stringify(user));
-    router.push('/app');
+  async function login() {
+    if (!email || !password) { setError('Completá email y contraseña'); return; }
+    setLoading(true); setError('');
+    const result = await signIn(email, password);
+    setLoading(false);
+    if ('error' in result && result.error) { setError(result.error); return; }
+    if ('user' in result && result.user) {
+      localStorage.setItem('ip_u', JSON.stringify({
+        id: result.user.id,
+        name: result.name,
+        email: result.user.email,
+        role: result.role,
+      }));
+      router.push('/app');
+    }
   }
 
-  function register() {
-    const n = name || 'Usuario';
-    const e = email || 'usuario@instaprop.com';
-    const user = { name: n, email: e };
-    localStorage.setItem('ip_u', JSON.stringify(user));
-    router.push('/app');
+  async function register() {
+    if (!name || !email || !password) { setError('Completá todos los campos'); return; }
+    if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres'); return; }
+    setLoading(true); setError('');
+    const result = await signUp(email, password, name, isSeller ? 'seller' : 'buyer');
+    setLoading(false);
+    if ('error' in result && result.error) { setError(result.error); return; }
+    if ('user' in result && result.user) {
+      localStorage.setItem('ip_u', JSON.stringify({
+        id: result.user.id,
+        name: result.name,
+        email: result.user.email,
+        role: result.role,
+      }));
+      router.push('/app');
+    }
   }
 
   return (
@@ -42,26 +66,36 @@ export default function AuthPage() {
         </div>
 
         <div className="auth-tabs">
-          <button className={`auth-tab ${tab === 'login' ? 'active' : ''}`} onClick={() => setTab('login')}>Ingresar</button>
-          <button className={`auth-tab ${tab === 'register' ? 'active' : ''}`} onClick={() => setTab('register')}>Registrarse</button>
+          <button className={`auth-tab ${tab === 'login' ? 'active' : ''}`} onClick={() => { setTab('login'); setError(''); }}>Ingresar</button>
+          <button className={`auth-tab ${tab === 'register' ? 'active' : ''}`} onClick={() => { setTab('register'); setError(''); }}>Registrarse</button>
         </div>
+
+        {error && <div className="auth-err">{error}</div>}
 
         {tab === 'login' ? (
           <div className="auth-form">
-            <input className="inp" type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-            <input className="inp" type="password" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} />
-            <button className="btn-p" style={{ width: '100%' }} onClick={login}>Ingresar</button>
+            <input className="inp" type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && login()} />
+            <input className="inp" type="password" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && login()} />
+            <button className="btn-p" style={{ width: '100%' }} onClick={login} disabled={loading}>
+              {loading ? 'Ingresando...' : 'Ingresar'}
+            </button>
             <div className="auth-dv">o</div>
-            <button className="btn-gg" onClick={login}><GoogleIcon />Continuar con Google</button>
+            <button className="btn-gg" onClick={login} disabled={loading}><GoogleIcon />Continuar con Google</button>
           </div>
         ) : (
           <div className="auth-form">
             <input className="inp" type="text" placeholder="Nombre completo" value={name} onChange={e => setName(e.target.value)} />
             <input className="inp" type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-            <input className="inp" type="password" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} />
-            <button className="btn-p" style={{ width: '100%' }} onClick={register}>Crear cuenta</button>
+            <input className="inp" type="password" placeholder="Contraseña (mín. 6 caracteres)" value={password} onChange={e => setPassword(e.target.value)} />
+            <label className="auth-role">
+              <input type="checkbox" checked={isSeller} onChange={e => setIsSeller(e.target.checked)} />
+              <span>Soy vendedor / inmobiliaria</span>
+            </label>
+            <button className="btn-p" style={{ width: '100%' }} onClick={register} disabled={loading}>
+              {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+            </button>
             <div className="auth-dv">o</div>
-            <button className="btn-gg" onClick={register}><GoogleIcon />Continuar con Google</button>
+            <button className="btn-gg" onClick={register} disabled={loading}><GoogleIcon />Continuar con Google</button>
           </div>
         )}
 

@@ -7,6 +7,61 @@ const SUPABASE_KEY =
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+export async function signUp(email: string, password: string, name: string, role: 'buyer' | 'seller') {
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error || !data.user) return { error: error?.message ?? 'Error al registrarse' };
+
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .insert({ id: data.user.id, name, email, role });
+
+  if (profileError) return { error: profileError.message };
+  return { user: data.user, name, role };
+}
+
+export async function signIn(email: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.user) return { error: error?.message ?? 'Email o contraseña incorrectos' };
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('name, role')
+    .eq('id', data.user.id)
+    .single();
+
+  return {
+    user: data.user,
+    name: profile?.name ?? email.split('@')[0],
+    role: (profile?.role ?? 'buyer') as 'buyer' | 'seller',
+  };
+}
+
+export async function signOut() {
+  await supabase.auth.signOut();
+}
+
+export async function getSession() {
+  const { data } = await supabase.auth.getSession();
+  if (!data.session?.user) return null;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('name, role')
+    .eq('id', data.session.user.id)
+    .single();
+
+  return {
+    id: data.session.user.id,
+    email: data.session.user.email ?? '',
+    name: profile?.name ?? data.session.user.email?.split('@')[0] ?? 'Usuario',
+    role: (profile?.role ?? 'buyer') as 'buyer' | 'seller',
+  };
+}
+
+// ─── Properties ──────────────────────────────────────────────────────────────
+
 export async function getProperties(): Promise<Property[]> {
   try {
     const { data, error } = await supabase
@@ -20,6 +75,16 @@ export async function getProperties(): Promise<Property[]> {
   } catch {
     return FALLBACK_PROPS;
   }
+}
+
+export async function insertProperty(prop: Omit<Property, 'id' | 'likes'>) {
+  const { data, error } = await supabase
+    .from('properties')
+    .insert({ ...prop, likes: 0 })
+    .select()
+    .single();
+  if (error) return { error: error.message };
+  return { property: data as Property };
 }
 
 const FALLBACK_PROPS: Property[] = [

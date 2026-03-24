@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getProperties } from '../../lib/supabase';
+import { getProperties, getSession, signOut } from '../../lib/supabase';
 import Feed from '../../components/Feed';
 import SearchView from '../../components/SearchView';
 import SavedView from '../../components/SavedView';
@@ -22,15 +22,26 @@ export default function AppPage() {
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  // Load from localStorage + Supabase
+  // Load session + Supabase
   useEffect(() => {
-    const raw = localStorage.getItem('ip_u');
-    if (!raw) { router.push('/auth'); return; }
-    setUser(JSON.parse(raw));
-    setLiked(JSON.parse(localStorage.getItem('ip_l') ?? '[]'));
-    setSaved(JSON.parse(localStorage.getItem('ip_s') ?? '[]'));
-    setViewed(+(localStorage.getItem('ip_v') ?? '0'));
-    getProperties().then(setProperties);
+    async function init() {
+      // Try real session first, fall back to localStorage cache
+      const session = await getSession();
+      if (session) {
+        const u = { id: session.id, name: session.name, email: session.email, role: session.role };
+        setUser(u);
+        localStorage.setItem('ip_u', JSON.stringify(u));
+      } else {
+        const raw = localStorage.getItem('ip_u');
+        if (!raw) { router.push('/auth'); return; }
+        setUser(JSON.parse(raw));
+      }
+      setLiked(JSON.parse(localStorage.getItem('ip_l') ?? '[]'));
+      setSaved(JSON.parse(localStorage.getItem('ip_s') ?? '[]'));
+      setViewed(+(localStorage.getItem('ip_v') ?? '0'));
+      getProperties().then(setProperties);
+    }
+    init();
   }, [router]);
 
   const showToast = useCallback((msg: string) => {
@@ -95,7 +106,8 @@ export default function AppPage() {
     if (idx >= 0) { setFeedIndex(idx); setActiveTab('feed'); }
   }, [properties]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    await signOut();
     localStorage.removeItem('ip_u');
     router.push('/');
   }, [router]);
