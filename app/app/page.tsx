@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getProperties, getSession, signOut } from '../../lib/supabase';
+import HomeFeed from '../../components/HomeFeed';
 import Feed from '../../components/Feed';
-import SearchView from '../../components/SearchView';
-import SavedView from '../../components/SavedView';
+import MessagesView from '../../components/MessagesView';
 import CommunityView from '../../components/CommunityView';
 import ProfileView from '../../components/ProfileView';
 import type { Property, User, Tab } from '../../types';
@@ -14,7 +14,7 @@ export default function AppPage() {
   const router = useRouter();
   const [properties, setProperties] = useState<Property[]>([]);
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('feed');
+  const [activeTab, setActiveTab] = useState<Tab>('home');
   const [feedIndex, setFeedIndex] = useState(0);
   const [liked, setLiked] = useState<number[]>([]);
   const [saved, setSaved] = useState<number[]>([]);
@@ -22,10 +22,8 @@ export default function AppPage() {
   const [toast, setToast] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  // Load session + Supabase
   useEffect(() => {
     async function init() {
-      // Try real session first, fall back to localStorage cache
       const session = await getSession();
       if (session) {
         const u = { id: session.id, name: session.name, email: session.email, role: session.role };
@@ -50,6 +48,7 @@ export default function AppPage() {
     toastTimer.current = setTimeout(() => setToast(''), 2500);
   }, []);
 
+  // Video feed (index-based)
   const next = useCallback(() => {
     setFeedIndex(i => {
       const n = i < properties.length - 1 ? i + 1 : 0;
@@ -62,35 +61,59 @@ export default function AppPage() {
 
   const prev = useCallback(() => setFeedIndex(i => Math.max(0, i - 1)), []);
 
-  const handleLike = useCallback(() => {
+  const handleVideoLike = useCallback(() => {
     const p = properties[feedIndex];
     if (!p) return;
     setLiked(prev => {
       const next = prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id];
       localStorage.setItem('ip_l', JSON.stringify(next));
-      showToast(next.includes(p.id) ? '❤️ ¡Te gustó esta propiedad!' : '');
+      showToast(next.includes(p.id) ? '❤️ ¡Te gustó!' : '');
       return next;
     });
   }, [feedIndex, properties, showToast]);
 
-  const handleSave = useCallback(() => {
+  const handleVideoSave = useCallback(() => {
     const p = properties[feedIndex];
     if (!p) return;
     setSaved(prev => {
       const wasSaved = prev.includes(p.id);
       const next = wasSaved ? prev.filter(x => x !== p.id) : [...prev, p.id];
       localStorage.setItem('ip_s', JSON.stringify(next));
-      showToast(wasSaved ? '🗑 Eliminado de guardados' : '🔖 Guardado');
+      showToast(wasSaved ? '🗑 Eliminado' : '🔖 Guardado');
       return next;
     });
   }, [feedIndex, properties, showToast]);
 
-  const handleContact = useCallback(() => {
+  // Home feed (ID-based)
+  const handleLikeById = useCallback((id: number) => {
+    setLiked(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('ip_l', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const handleSaveById = useCallback((id: number) => {
+    setSaved(prev => {
+      const wasSaved = prev.includes(id);
+      const next = wasSaved ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('ip_s', JSON.stringify(next));
+      showToast(wasSaved ? '🗑 Eliminado de guardados' : '🔖 Guardado');
+      return next;
+    });
+  }, [showToast]);
+
+  const handleContactById = useCallback((id: number) => {
+    const p = properties.find(x => x.id === id);
+    if (p) showToast(`💬 Contactando sobre ${p.address.split(',')[0]}...`);
+  }, [properties, showToast]);
+
+  const handleVideoContact = useCallback(() => {
     const p = properties[feedIndex];
     if (p) showToast(`💬 Contactando sobre ${p.address.split(',')[0]}...`);
   }, [feedIndex, properties, showToast]);
 
-  const handleShare = useCallback(() => {
+  const handleVideoShare = useCallback(() => {
     const p = properties[feedIndex];
     if (!p) return;
     if (navigator.share) {
@@ -103,7 +126,7 @@ export default function AppPage() {
 
   const handleSelectProperty = useCallback((id: number) => {
     const idx = properties.findIndex(p => p.id === id);
-    if (idx >= 0) { setFeedIndex(idx); setActiveTab('feed'); }
+    if (idx >= 0) { setFeedIndex(idx); setActiveTab('video'); }
   }, [properties]);
 
   const handleLogout = useCallback(async () => {
@@ -113,6 +136,7 @@ export default function AppPage() {
   }, [router]);
 
   const ini = user?.name.substring(0, 2).toUpperCase() ?? '';
+  const savedProperties = properties.filter(p => saved.includes(p.id));
 
   if (!user) return null;
 
@@ -131,7 +155,20 @@ export default function AppPage() {
 
       {/* Content */}
       <div className="acontent">
-        {activeTab === 'feed' && properties.length > 0 && (
+        {activeTab === 'home' && (
+          <HomeFeed
+            properties={properties}
+            liked={liked}
+            saved={saved}
+            onLike={handleLikeById}
+            onSave={handleSaveById}
+            onContact={handleContactById}
+          />
+        )}
+
+        {activeTab === 'messages' && <MessagesView />}
+
+        {activeTab === 'video' && properties.length > 0 && (
           <Feed
             properties={properties}
             currentIndex={feedIndex}
@@ -139,32 +176,10 @@ export default function AppPage() {
             saved={saved}
             onNext={next}
             onPrev={prev}
-            onLike={handleLike}
-            onSave={handleSave}
-            onContact={handleContact}
-            onShare={handleShare}
-          />
-        )}
-
-        {activeTab === 'search' && (
-          <SearchView
-            properties={properties}
-            onSelectProperty={handleSelectProperty}
-          />
-        )}
-
-        {activeTab === 'saved' && (
-          <SavedView
-            properties={properties}
-            savedIds={saved}
-            onRemove={id => {
-              setSaved(prev => {
-                const next = prev.filter(x => x !== id);
-                localStorage.setItem('ip_s', JSON.stringify(next));
-                return next;
-              });
-            }}
-            onSelect={handleSelectProperty}
+            onLike={handleVideoLike}
+            onSave={handleVideoSave}
+            onContact={handleVideoContact}
+            onShare={handleVideoShare}
           />
         )}
 
@@ -176,7 +191,9 @@ export default function AppPage() {
             viewed={viewed}
             likedCount={liked.length}
             savedCount={saved.length}
+            savedProperties={savedProperties}
             onLogout={handleLogout}
+            onSelectProperty={handleSelectProperty}
             onSavePrefs={prefs => {
               localStorage.setItem('ip_p', JSON.stringify(prefs));
               showToast('✓ Preferencias guardadas');
@@ -187,22 +204,48 @@ export default function AppPage() {
 
       {/* Bottom nav */}
       <div className="anav">
-        {([
-          { key: 'feed', icon: '🏠', label: 'Inicio' },
-          { key: 'search', icon: '🔍', label: 'Buscar' },
-          { key: 'saved', icon: '🔖', label: 'Guardados' },
-          { key: 'community', icon: '💬', label: 'Comunidad' },
-          { key: 'profile', icon: '👤', label: 'Perfil' },
-        ] as { key: Tab; icon: string; label: string }[]).map(({ key, icon, label }) => (
-          <button
-            key={key}
-            className={`ni ${activeTab === key ? 'active' : ''}`}
-            onClick={() => setActiveTab(key)}
-          >
-            <span className="ni-i">{icon}</span>
-            {label}
-          </button>
-        ))}
+        <button className={`ni ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+          <span className="ni-i">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'home' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </span>
+          Inicio
+        </button>
+        <button className={`ni ${activeTab === 'messages' ? 'active' : ''}`} onClick={() => setActiveTab('messages')}>
+          <span className="ni-i">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'messages' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </span>
+          Mensajes
+        </button>
+
+        {/* CENTER KEY BUTTON */}
+        <button className="ni-center" onClick={() => setActiveTab('video')}>
+          <div className={`ni-center-btn ${activeTab === 'video' ? 'active' : ''}`}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+            </svg>
+          </div>
+        </button>
+
+        <button className={`ni ${activeTab === 'community' ? 'active' : ''}`} onClick={() => setActiveTab('community')}>
+          <span className="ni-i">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'community' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </span>
+          Comunidad
+        </button>
+        <button className={`ni ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
+          <span className="ni-i">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'profile' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+          </span>
+          Perfil
+        </button>
       </div>
 
       {/* Toast */}

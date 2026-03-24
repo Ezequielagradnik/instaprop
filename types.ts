@@ -32,5 +32,5 @@ export interface UserPrefs {
   budget: number;
 }
 
-export type Tab = 'feed' | 'search' | 'saved' | 'community' | 'profile';
+export type Tab = 'home' | 'messages' | 'video' | 'community' | 'profile';
 export type FilterType = 'all' | 'mono' | '2amb' | '3amb' | 'casa' | 'lujo';
