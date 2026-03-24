@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { User, Property } from '../types';
-import { insertProperty } from '../lib/supabase';
+import { insertProperty, upgradeToSeller } from '../lib/supabase';
 
 interface Props {
   user: User;
@@ -13,6 +13,7 @@ interface Props {
   onLogout: () => void;
   onSavePrefs: (prefs: Record<string, unknown>) => void;
   onSelectProperty: (id: number) => void;
+  onUserUpgrade: (user: User) => void;
 }
 
 const ZONES = ['Palermo', 'Belgrano', 'Recoleta', 'Núñez', 'Villa Crespo', 'Caballito', 'Villa Urquiza', 'Colegiales', 'Saavedra', 'Almagro'];
@@ -28,14 +29,28 @@ const PROP_TYPES = [
   { val: 'loft', label: 'Loft' },
 ];
 
-type ProfileTab = 'activity' | 'saved' | 'prefs' | 'config';
+// Mock seller posts with metrics
+const MOCK_POSTS = [
+  { id: 1, img: 'https://picsum.photos/id/1029/400/400', price: 'USD 185.000', addr: 'Thames 1842', views: 4230, likes: 89 },
+  { id: 2, img: 'https://picsum.photos/id/1048/400/400', price: 'USD 245.000', addr: 'Libertador 3200', views: 1820, likes: 45 },
+  { id: 3, img: 'https://picsum.photos/id/1047/400/400', price: 'USD 92.000', addr: 'Malabia 654', views: 3100, likes: 67 },
+  { id: 4, img: 'https://picsum.photos/id/1076/400/400', price: 'USD 320.000', addr: 'Olazábal 4500', views: 2750, likes: 112 },
+  { id: 5, img: 'https://picsum.photos/id/1080/400/400', price: 'USD 158.000', addr: 'Quintana 580', views: 5400, likes: 203 },
+  { id: 6, img: 'https://picsum.photos/id/1082/400/400', price: 'USD 195.000', addr: 'Triunvirato 4200', views: 980, likes: 31 },
+];
+
+const FEATURED_STORIES = [
+  { id: 1, label: 'Palermo', img: 'https://picsum.photos/id/1029/200/200' },
+  { id: 2, label: 'Belgrano', img: 'https://picsum.photos/id/1048/200/200' },
+  { id: 3, label: 'Recoleta', img: 'https://picsum.photos/id/1080/200/200' },
+];
 
 function Toggle({ defaultOn = true }: { defaultOn?: boolean }) {
   const [on, setOn] = useState(defaultOn);
   return <div className={`tgl ${on ? 'on' : ''}`} onClick={() => setOn(v => !v)} />;
 }
 
-function UploadPropertyForm() {
+function UploadForm({ onDone }: { onDone: () => void }) {
   const [address, setAddress] = useState('');
   const [neighborhood, setNeighborhood] = useState('Palermo');
   const [propType, setPropType] = useState('2amb');
@@ -44,13 +59,14 @@ function UploadPropertyForm() {
   const [area, setArea] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [contentType, setContentType] = useState<'photo' | 'video'>('photo');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
   async function submit() {
     if (!address || !price) { setMsg('❌ Dirección y precio son obligatorios'); return; }
     const priceNum = parseInt(price.replace(/\D/g, ''));
-    if (isNaN(priceNum) || priceNum <= 0) { setMsg('❌ Precio inválido'); return; }
+    if (isNaN(priceNum)) { setMsg('❌ Precio inválido'); return; }
     setLoading(true); setMsg('');
     const result = await insertProperty({
       address, neighborhood,
@@ -68,43 +84,95 @@ function UploadPropertyForm() {
     });
     setLoading(false);
     if ('error' in result && result.error) setMsg('❌ ' + result.error);
-    else { setMsg('✅ Propiedad publicada'); setAddress(''); setPrice(''); setBedrooms(''); setArea(''); setDescription(''); setImageUrl(''); }
+    else { setMsg('✅ Propiedad publicada'); setTimeout(onDone, 1500); }
   }
 
   return (
-    <div className="ss">
-      <div className="ss-t">🏠 Publicar propiedad</div>
-      <div className="up-form">
-        {msg && <div className={`up-msg ${msg.startsWith('✅') ? 'ok' : 'err'}`}>{msg}</div>}
-        <input className="inp" placeholder="Dirección (ej: Thames 1842, Palermo)" value={address} onChange={e => setAddress(e.target.value)} />
-        <div className="up-row">
-          <select className="inp" value={neighborhood} onChange={e => setNeighborhood(e.target.value)}>
-            {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
-          </select>
-          <select className="inp" value={propType} onChange={e => setPropType(e.target.value)}>
-            {PROP_TYPES.map(t => <option key={t.val} value={t.val}>{t.label}</option>)}
-          </select>
+    <div className="upload-modal">
+      <div className="upload-modal-inner">
+        <div className="upload-modal-hdr">
+          <button className="agent-back" onClick={onDone}>✕</button>
+          <span style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '1rem' }}>Subir contenido</span>
+          <div style={{ width: 32 }} />
         </div>
-        <div className="up-row">
-          <input className="inp" placeholder="Precio USD" value={price} onChange={e => setPrice(e.target.value)} />
+
+        <div className="upload-tabs">
+          <button className={`upload-tab ${contentType === 'photo' ? 'active' : ''}`} onClick={() => setContentType('photo')}>
+            📸 Carrusel de fotos
+          </button>
+          <button className={`upload-tab ${contentType === 'video' ? 'active' : ''}`} onClick={() => setContentType('video')}>
+            🎬 Video / Reel
+          </button>
+        </div>
+
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto', flex: 1 }}>
+          {msg && <div className={`up-msg ${msg.startsWith('✅') ? 'ok' : 'err'}`}>{msg}</div>}
+
+          <div className="upload-img-placeholder">
+            {contentType === 'photo' ? (
+              <>
+                <div style={{ fontSize: '2.5rem' }}>📸</div>
+                <div style={{ marginTop: 8, fontSize: '.85rem', color: '#888' }}>Tocá para subir fotos (hasta 10)</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '2.5rem' }}>🎬</div>
+                <div style={{ marginTop: 8, fontSize: '.85rem', color: '#888' }}>Tocá para subir video (máx. 60s)</div>
+              </>
+            )}
+          </div>
+
+          <input className="inp" placeholder="URL de imagen (mientras tanto)" value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
+          <input className="inp" placeholder="Dirección (ej: Thames 1842, Palermo)" value={address} onChange={e => setAddress(e.target.value)} />
+          <div className="up-row">
+            <select className="inp" value={neighborhood} onChange={e => setNeighborhood(e.target.value)}>
+              {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+            </select>
+            <select className="inp" value={propType} onChange={e => setPropType(e.target.value)}>
+              {PROP_TYPES.map(t => <option key={t.val} value={t.val}>{t.label}</option>)}
+            </select>
+          </div>
+          <div className="up-row">
+            <input className="inp" placeholder="Precio USD" value={price} onChange={e => setPrice(e.target.value)} />
+            <input className="inp" placeholder="m²" value={area} onChange={e => setArea(e.target.value)} type="number" />
+          </div>
           <input className="inp" placeholder="Ambientes" value={bedrooms} onChange={e => setBedrooms(e.target.value)} type="number" />
+          <textarea className="inp up-desc" placeholder="Descripción de la propiedad..." value={description} onChange={e => setDescription(e.target.value)} rows={3} />
+          <button className="btn-p" style={{ width: '100%' }} onClick={submit} disabled={loading}>
+            {loading ? 'Publicando...' : '🚀 Publicar propiedad'}
+          </button>
         </div>
-        <div className="up-row">
-          <input className="inp" placeholder="m²" value={area} onChange={e => setArea(e.target.value)} type="number" />
-          <input className="inp" placeholder="URL imagen (opcional)" value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
-        </div>
-        <textarea className="inp up-desc" placeholder="Descripción..." value={description} onChange={e => setDescription(e.target.value)} rows={3} />
-        <button className="btn-p" style={{ width: '100%' }} onClick={submit} disabled={loading}>
-          {loading ? 'Publicando...' : '🚀 Publicar propiedad'}
-        </button>
       </div>
     </div>
   );
 }
 
-export default function ProfileView({ user, viewed, likedCount, savedCount, savedProperties, onLogout, onSavePrefs, onSelectProperty }: Props) {
+function SettingsMenu({ onClose, onLogout }: { onClose: () => void; onLogout: () => void }) {
+  return (
+    <div className="settings-menu" onClick={onClose}>
+      <div className="settings-menu-box" onClick={e => e.stopPropagation()}>
+        <div className="settings-menu-item">⚙️ Editar perfil</div>
+        <div className="settings-menu-item">🔖 Contenido guardado</div>
+        <div className="settings-menu-item">❤️ Publicaciones con likes</div>
+        <div className="settings-menu-item">📊 Estadísticas</div>
+        <div className="settings-menu-item">🔒 Privacidad</div>
+        <div className="settings-menu-item">🔔 Notificaciones</div>
+        <div className="settings-menu-item" style={{ color: 'var(--accent)' }} onClick={onLogout}>🚪 Cerrar sesión</div>
+      </div>
+    </div>
+  );
+}
+
+type ProfileTab = 'posts' | 'saved' | 'prefs' | 'activity';
+
+export default function ProfileView({ user, viewed, likedCount, savedCount, savedProperties, onLogout, onSavePrefs, onSelectProperty, onUserUpgrade }: Props) {
   const ini = user.name.substring(0, 2).toUpperCase();
-  const [activeTab, setActiveTab] = useState<ProfileTab>('activity');
+  const isSeller = user.role === 'seller';
+  const [activeTab, setActiveTab] = useState<ProfileTab>(isSeller ? 'posts' : 'activity');
+  const [showUpload, setShowUpload] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
   const [sel, setSel] = useState<Record<string, string[]>>({ zones: [], types: [], rooms: [], features: [] });
   const [budget, setBudget] = useState(200000);
 
@@ -114,53 +182,161 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, save
       [group]: prev[group].includes(val) ? prev[group].filter(x => x !== val) : [...prev[group], val],
     }));
   };
-
   const isOn = (group: string, val: string) => sel[group].includes(val);
+
+  async function handleUpgrade() {
+    setUpgrading(true);
+    const result = await upgradeToSeller(user.id);
+    setUpgrading(false);
+    if ('error' in result && result.error) return;
+    const newUser = { ...user, role: 'seller' as const };
+    onUserUpgrade(newUser);
+    setShowUpgradeConfirm(false);
+    setActiveTab('posts');
+  }
+
+  const sellerTabs: { key: ProfileTab; label: string }[] = [
+    { key: 'posts', label: 'Publicaciones' },
+    { key: 'saved', label: 'Guardados' },
+    { key: 'prefs', label: 'Preferencias' },
+  ];
+  const buyerTabs: { key: ProfileTab; label: string }[] = [
+    { key: 'activity', label: 'Actividad' },
+    { key: 'saved', label: 'Guardados' },
+    { key: 'prefs', label: 'Búsqueda' },
+  ];
+  const tabs = isSeller ? sellerTabs : buyerTabs;
+
+  const totalViews = MOCK_POSTS.reduce((s, p) => s + p.views, 0);
+  const totalLikes = MOCK_POSTS.reduce((s, p) => s + p.likes, 0);
 
   return (
     <div className="pv">
+      {showUpload && <UploadForm onDone={() => setShowUpload(false)} />}
+      {showSettings && <SettingsMenu onClose={() => setShowSettings(false)} onLogout={onLogout} />}
+
       {/* Header */}
       <div className="phdr">
-        <div className="pav">{ini}</div>
-        <div className="pnm">{user.name}</div>
-        <div className="pem">{user.email}</div>
-        {user.role === 'seller' && <div className="prole">🏢 Vendedor / Inmobiliaria</div>}
-        <div className="pstats">
-          <div className="pstat"><div className="pstat-n">{viewed}</div><div className="pstat-l">Vistos</div></div>
-          <div className="pstat-div" />
-          <div className="pstat"><div className="pstat-n">{likedCount}</div><div className="pstat-l">Likes</div></div>
-          <div className="pstat-div" />
-          <div className="pstat"><div className="pstat-n">{savedCount}</div><div className="pstat-l">Guardados</div></div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 0 8px' }}>
+          <button className="profile-settings-btn" onClick={() => setShowSettings(true)}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2">
+              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
         </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '0 4px 16px' }}>
+          <div className="pav">{ini}</div>
+          <div style={{ flex: 1 }}>
+            <div className="pnm">{user.name}</div>
+            <div className="pem">{user.email}</div>
+            {isSeller && <div className="prole">🏢 Vendedor / Inmobiliaria</div>}
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="pstats">
+          {isSeller ? (
+            <>
+              <div className="pstat"><div className="pstat-n">{MOCK_POSTS.length}</div><div className="pstat-l">Publicaciones</div></div>
+              <div className="pstat-div" />
+              <div className="pstat"><div className="pstat-n">{(totalViews / 1000).toFixed(1)}K</div><div className="pstat-l">Vistas</div></div>
+              <div className="pstat-div" />
+              <div className="pstat"><div className="pstat-n">{totalLikes}</div><div className="pstat-l">Likes</div></div>
+            </>
+          ) : (
+            <>
+              <div className="pstat"><div className="pstat-n">{viewed}</div><div className="pstat-l">Vistos</div></div>
+              <div className="pstat-div" />
+              <div className="pstat"><div className="pstat-n">{likedCount}</div><div className="pstat-l">Likes</div></div>
+              <div className="pstat-div" />
+              <div className="pstat"><div className="pstat-n">{savedCount}</div><div className="pstat-l">Guardados</div></div>
+            </>
+          )}
+        </div>
+
+        {/* Seller CTA or upgrade */}
+        {isSeller ? (
+          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+            <button className="btn-p" style={{ flex: 1, padding: '11px 16px', fontSize: '.88rem' }} onClick={() => setShowUpload(true)}>
+              + Subir contenido
+            </button>
+            <button style={{ flex: 1, padding: '11px 16px', fontSize: '.88rem', border: '1.5px solid rgba(0,0,0,.15)', borderRadius: 50, background: 'none', fontWeight: 600, cursor: 'pointer', color: '#333' }}>
+              Editar perfil
+            </button>
+          </div>
+        ) : (
+          <div style={{ marginTop: 14 }}>
+            <button
+              className="upgrade-btn"
+              onClick={() => setShowUpgradeConfirm(true)}
+            >
+              🏢 Cambiar a cuenta vendedor
+            </button>
+          </div>
+        )}
+
+        {/* Upgrade confirm */}
+        {showUpgradeConfirm && (
+          <div className="upgrade-modal">
+            <div className="upgrade-modal-box">
+              <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏢</div>
+              <div style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '1.1rem', marginBottom: 8 }}>Cambiar a vendedor</div>
+              <div style={{ fontSize: '.85rem', color: '#666', marginBottom: 20, lineHeight: 1.5 }}>
+                Al cambiar desbloquearás la publicación de propiedades, estadísticas y herramientas para inmobiliarias.
+              </div>
+              <button className="btn-p" style={{ width: '100%' }} onClick={handleUpgrade} disabled={upgrading}>
+                {upgrading ? 'Cambiando...' : 'Confirmar cambio'}
+              </button>
+              <button onClick={() => setShowUpgradeConfirm(false)} style={{ marginTop: 10, width: '100%', padding: '10px', background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '.85rem' }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Featured stories (sellers only) */}
+        {isSeller && (
+          <div className="featured-stories">
+            {FEATURED_STORIES.map(s => (
+              <div key={s.id} className="feat-story">
+                <div className="feat-story-img" style={{ backgroundImage: `url('${s.img}')` }} />
+                <div className="feat-story-label">{s.label}</div>
+              </div>
+            ))}
+            <div className="feat-story add">
+              <div className="feat-story-add">+</div>
+              <div className="feat-story-label">Agregar</div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Profile tabs */}
+      {/* Tabs */}
       <div className="ptabs">
-        {([
-          { key: 'activity', label: 'Actividad' },
-          { key: 'saved', label: 'Guardados' },
-          { key: 'prefs', label: 'Búsqueda' },
-          { key: 'config', label: 'Config' },
-        ] as { key: ProfileTab; label: string }[]).map(t => (
+        {tabs.map(t => (
           <button key={t.key} className={`ptab ${activeTab === t.key ? 'active' : ''}`} onClick={() => setActiveTab(t.key)}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* Activity */}
-      {activeTab === 'activity' && (
-        <div>
-          {user.role === 'seller' && <UploadPropertyForm />}
-          <div className="ss">
-            <div className="ss-t">📊 Mi actividad</div>
-            <div className="ss-c">
-              <div className="ss-r"><div className="ss-rl"><div className="ss-ri">👁</div><div><div className="ss-rla">Propiedades vistas</div></div></div><div className="ss-rr">{viewed}</div></div>
-              <div className="ss-r"><div className="ss-rl"><div className="ss-ri">❤️</div><div><div className="ss-rla">Likes dados</div></div></div><div className="ss-rr">{likedCount}</div></div>
-              <div className="ss-r"><div className="ss-rl"><div className="ss-ri">🔖</div><div><div className="ss-rla">Guardados</div></div></div><div className="ss-rr">{savedCount}</div></div>
+      {/* Seller: Posts with metrics */}
+      {activeTab === 'posts' && isSeller && (
+        <div className="seller-posts-grid">
+          {MOCK_POSTS.map(p => (
+            <div key={p.id} className="seller-post">
+              <div className="seller-post-img" style={{ backgroundImage: `url('${p.img}')` }} />
+              <div className="seller-post-overlay">
+                <span>👁 {(p.views / 1000).toFixed(1)}K</span>
+                <span>❤️ {p.likes}</span>
+              </div>
+              <div className="seller-post-info">
+                <div className="seller-post-price">{p.price}</div>
+                <div className="seller-post-addr">{p.addr}</div>
+              </div>
             </div>
-          </div>
-          <button className="btn-lo" onClick={onLogout}>Cerrar sesión</button>
+          ))}
         </div>
       )}
 
@@ -230,14 +406,16 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, save
         </div>
       )}
 
-      {/* Config */}
-      {activeTab === 'config' && (
-        <div className="ss">
-          <div className="ss-c">
-            <div className="ss-r"><div className="ss-rl"><div className="ss-ri">🔔</div><div><div className="ss-rla">Notificaciones push</div><div className="ss-rs">Nuevas propiedades que matchean</div></div></div><Toggle /></div>
-            <div className="ss-r"><div className="ss-rl"><div className="ss-ri">📧</div><div><div className="ss-rla">Resumen semanal</div><div className="ss-rs">Email con las mejores propiedades</div></div></div><Toggle /></div>
-            <div className="ss-r"><div className="ss-rl"><div className="ss-ri">🌙</div><div><div className="ss-rla">Modo oscuro</div><div className="ss-rs">Solo para el feed de videos</div></div></div><Toggle defaultOn={false} /></div>
-            <div className="ss-r"><div className="ss-rl"><div className="ss-ri">📍</div><div><div className="ss-rla">Ubicación</div><div className="ss-rs">Para mejores recomendaciones</div></div></div><div className="ss-rr">Buenos Aires ›</div></div>
+      {/* Activity (buyers) */}
+      {activeTab === 'activity' && (
+        <div>
+          <div className="ss">
+            <div className="ss-t" style={{ padding: '16px 16px 8px' }}>⚙️ Configuración</div>
+            <div className="ss-c">
+              <div className="ss-r"><div className="ss-rl"><div className="ss-ri">🔔</div><div><div className="ss-rla">Notificaciones push</div><div className="ss-rs">Nuevas propiedades que matchean</div></div></div><Toggle /></div>
+              <div className="ss-r"><div className="ss-rl"><div className="ss-ri">📧</div><div><div className="ss-rla">Resumen semanal</div><div className="ss-rs">Email con las mejores propiedades</div></div></div><Toggle /></div>
+              <div className="ss-r"><div className="ss-rl"><div className="ss-ri">📍</div><div><div className="ss-rla">Ubicación</div><div className="ss-rs">Para mejores recomendaciones</div></div></div><div className="ss-rr">Buenos Aires ›</div></div>
+            </div>
           </div>
           <button className="btn-lo" onClick={onLogout}>Cerrar sesión</button>
         </div>

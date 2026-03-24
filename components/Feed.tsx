@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Property } from '../types';
 
 interface Props {
@@ -19,6 +19,8 @@ interface Props {
 export default function Feed({ properties, currentIndex, liked, saved, onNext, onPrev, onLike, onSave, onContact, onShare }: Props) {
   const touchY = useRef(0);
   const wheelLocked = useRef(false);
+  const tapTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [paused, setPaused] = useState(false);
   const p = properties[currentIndex];
 
   useEffect(() => {
@@ -58,7 +60,19 @@ export default function Feed({ properties, currentIndex, liked, saved, onNext, o
           if (d > 40) onNext();
           if (d < -40) onPrev();
         }}
-        onClick={e => { if (!(e.target as Element).closest('.sbtn')) onNext(); }}
+        onClick={e => {
+          if ((e.target as Element).closest('.sbtn')) return;
+          // Single tap = pause/play, handled via timer
+          clearTimeout(tapTimer.current);
+          tapTimer.current = setTimeout(() => {
+            setPaused(v => !v);
+          }, 180);
+        }}
+        onDoubleClick={e => {
+          if ((e.target as Element).closest('.sbtn')) return;
+          clearTimeout(tapTimer.current);
+          onNext();
+        }}
       >
         {properties.map((prop, i) => {
           const cls = i === currentIndex ? 'cur' : i > currentIndex ? 'blw' : 'abv';
@@ -110,7 +124,14 @@ export default function Feed({ properties, currentIndex, liked, saved, onNext, o
         </button>
       </div>
 
-      <div className="swh">↑ swipe o flechas para navegar</div>
+      {/* Pause indicator */}
+      {paused && (
+        <div className="feed-pause-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="white"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        </div>
+      )}
+
+      <div className="swh">↑ swipe · toca para pausar</div>
     </div>
   );
 }

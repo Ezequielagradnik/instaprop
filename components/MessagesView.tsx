@@ -1,6 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+export interface OpenChatData {
+  agentName: string;
+  agentIni: string;
+  agentGrad: string;
+  propertyAddress: string;
+}
 
 interface Chat {
   id: number;
@@ -13,7 +20,7 @@ interface Chat {
   property: string;
 }
 
-const CHATS: Chat[] = [
+const BASE_CHATS: Chat[] = [
   { id: 1, name: 'Palermo Propiedades', ini: 'PP', grad: 'linear-gradient(135deg,#FF3322,#FF6B5B)', lastMsg: 'Hola! Quisiera más info sobre Thames 1842 😊', time: '10:32', unread: 2, property: 'Thames 1842, Palermo' },
   { id: 2, name: 'Belgrano R. Inmobiliaria', ini: 'BI', grad: 'linear-gradient(135deg,#6C5CE7,#A29BFE)', lastMsg: 'Le puedo coordinar una visita el miércoles a las 15hs', time: 'Ayer', unread: 0, property: 'Av. Libertador 3200' },
   { id: 3, name: 'Núñez Homes', ini: 'NH', grad: 'linear-gradient(135deg,#00B09B,#96C93D)', lastMsg: 'La propiedad sigue disponible ✅', time: 'Lun', unread: 1, property: 'Olazábal 4500, Núñez' },
@@ -22,25 +29,50 @@ const CHATS: Chat[] = [
 
 interface MsgLine { id: number; me: boolean; text: string; time: string; }
 
-function ChatScreen({ chat, onBack }: { chat: Chat; onBack: () => void }) {
+function now() {
+  return new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function ChatScreen({ chat, initialMsg, onBack }: { chat: Chat; initialMsg?: string; onBack: () => void }) {
   const [input, setInput] = useState('');
-  const [msgs, setMsgs] = useState<MsgLine[]>([
-    { id: 1, me: false, text: `¡Hola! Vi la propiedad en ${chat.property} y me interesa.`, time: '10:28' },
-    { id: 2, me: true, text: '¡Buenas! Con gusto te asesoramos. ¿Tenés alguna pregunta específica?', time: '10:30' },
-    { id: 3, me: false, text: chat.lastMsg, time: chat.time },
-  ]);
+  const [msgs, setMsgs] = useState<MsgLine[]>(() => {
+    const base: MsgLine[] = [
+      { id: 1, me: false, text: `¡Hola! Vi la propiedad en ${chat.property} y me interesa.`, time: '10:28' },
+      { id: 2, me: true, text: '¡Buenas! Con gusto te asesoramos. ¿Tenés alguna pregunta específica?', time: '10:30' },
+      { id: 3, me: false, text: chat.lastMsg, time: chat.time },
+    ];
+    if (initialMsg) {
+      base.push({ id: 4, me: false, text: initialMsg, time: now() });
+    }
+    return base;
+  });
+
+  useEffect(() => {
+    if (initialMsg) {
+      // Auto-respond after 1 second
+      const t = setTimeout(() => {
+        setMsgs(prev => [...prev, {
+          id: Date.now(),
+          me: true,
+          text: '¡Perfecto! Con mucho gusto te enviamos toda la información detallada. ¿Querés coordinar una visita? 🏠',
+          time: now(),
+        }]);
+      }, 1000);
+      return () => clearTimeout(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function send() {
     if (!input.trim()) return;
     const txt = input;
     setInput('');
-    setMsgs(prev => [...prev, { id: Date.now(), me: false, text: txt, time: 'ahora' }]);
+    setMsgs(prev => [...prev, { id: Date.now(), me: false, text: txt, time: now() }]);
     setTimeout(() => {
       setMsgs(prev => [...prev, {
-        id: Date.now() + 1,
-        me: true,
-        text: '¡Gracias! Revisamos tu consulta y te respondemos en minutos 🙌',
-        time: 'ahora',
+        id: Date.now() + 1, me: true,
+        text: '¡Gracias! Te respondemos en breve 🙌',
+        time: now(),
       }]);
     }, 900);
   }
@@ -88,16 +120,50 @@ function ChatScreen({ chat, onBack }: { chat: Chat; onBack: () => void }) {
   );
 }
 
-export default function MessagesView() {
-  const [open, setOpen] = useState<Chat | null>(null);
+interface Props {
+  openChat?: OpenChatData | null;
+  onChatOpened?: () => void;
+}
 
-  if (open) return <ChatScreen chat={open} onBack={() => setOpen(null)} />;
+export default function MessagesView({ openChat, onChatOpened }: Props) {
+  const [chats, setChats] = useState<Chat[]>(BASE_CHATS);
+  const [open, setOpen] = useState<{ chat: Chat; initialMsg?: string } | null>(null);
+
+  // Auto-open chat when coming from a property contact
+  useEffect(() => {
+    if (!openChat) return;
+    const existing = chats.find(c => c.name === openChat.agentName);
+    const initialMsg = `Hola, quiero más información detallada sobre esta propiedad: ${openChat.propertyAddress}`;
+
+    if (existing) {
+      setOpen({ chat: existing, initialMsg });
+    } else {
+      const newChat: Chat = {
+        id: Date.now(),
+        name: openChat.agentName,
+        ini: openChat.agentIni,
+        grad: openChat.agentGrad,
+        lastMsg: initialMsg,
+        time: 'ahora',
+        unread: 0,
+        property: openChat.propertyAddress,
+      };
+      setChats(prev => [newChat, ...prev]);
+      setOpen({ chat: newChat, initialMsg });
+    }
+    onChatOpened?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openChat]);
+
+  if (open) return <ChatScreen chat={open.chat} initialMsg={open.initialMsg} onBack={() => setOpen(null)} />;
+
+  const totalUnread = chats.reduce((s, c) => s + c.unread, 0);
 
   return (
     <div className="mv">
       <div className="mv-hdr">
         <h2>Mensajes</h2>
-        <span className="mv-count">{CHATS.reduce((s, c) => s + c.unread, 0)} sin leer</span>
+        {totalUnread > 0 && <span className="mv-count">{totalUnread} sin leer</span>}
       </div>
 
       <div className="mv-search">
@@ -108,8 +174,8 @@ export default function MessagesView() {
       </div>
 
       <div className="mv-list">
-        {CHATS.map(c => (
-          <button key={c.id} className="mv-item" onClick={() => setOpen(c)}>
+        {chats.map(c => (
+          <button key={c.id} className="mv-item" onClick={() => setOpen({ chat: c })}>
             <div className="mv-av-wrap">
               <div className="mv-av" style={{ background: c.grad }}>{c.ini}</div>
               {c.unread > 0 && <div className="mv-dot" />}

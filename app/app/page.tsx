@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getProperties, getSession, signOut } from '../../lib/supabase';
-import HomeFeed from '../../components/HomeFeed';
+import HomeFeed, { AGENT_GRADS } from '../../components/HomeFeed';
 import Feed from '../../components/Feed';
-import MessagesView from '../../components/MessagesView';
+import MessagesView, { type OpenChatData } from '../../components/MessagesView';
 import CommunityView from '../../components/CommunityView';
 import ProfileView from '../../components/ProfileView';
 import type { Property, User, Tab } from '../../types';
@@ -20,7 +20,10 @@ export default function AppPage() {
   const [saved, setSaved] = useState<number[]>([]);
   const [viewed, setViewed] = useState(0);
   const [toast, setToast] = useState('');
+  const [openChatWith, setOpenChatWith] = useState<OpenChatData | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+  const lastTabTap = useRef<{ tab: Tab; time: number }>({ tab: 'home', time: 0 });
+  const homeScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function init() {
@@ -48,7 +51,24 @@ export default function AppPage() {
     toastTimer.current = setTimeout(() => setToast(''), 2500);
   }, []);
 
-  // Video feed (index-based)
+  // Double-tap nav: same tab tapped twice fast → reset
+  const handleNavTap = useCallback((tab: Tab) => {
+    const now = Date.now();
+    if (activeTab === tab && now - lastTabTap.current.time < 350) {
+      if (tab === 'home') {
+        homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        getProperties().then(setProperties);
+        showToast('🔄 Feed actualizado');
+      } else if (tab === 'video') {
+        setFeedIndex(0);
+        showToast('⬆️ Volviste al inicio');
+      }
+    }
+    lastTabTap.current = { tab, time: now };
+    setActiveTab(tab);
+  }, [activeTab, showToast]);
+
+  // Video feed
   const next = useCallback(() => {
     setFeedIndex(i => {
       const n = i < properties.length - 1 ? i + 1 : 0;
@@ -103,21 +123,30 @@ export default function AppPage() {
     });
   }, [showToast]);
 
-  const handleContactById = useCallback((id: number) => {
+  // Contact → opens Messages with pre-loaded chat
+  const handleContactChat = useCallback((id: number) => {
     const p = properties.find(x => x.id === id);
-    if (p) showToast(`💬 Contactando sobre ${p.address.split(',')[0]}...`);
-  }, [properties, showToast]);
+    if (!p) return;
+    setOpenChatWith({
+      agentName: p.neighborhood + ' Propiedades',
+      agentIni: p.neighborhood.substring(0, 2).toUpperCase(),
+      agentGrad: AGENT_GRADS[p.id % AGENT_GRADS.length],
+      propertyAddress: p.address,
+    });
+    setActiveTab('messages');
+  }, [properties]);
 
   const handleVideoContact = useCallback(() => {
     const p = properties[feedIndex];
-    if (p) showToast(`💬 Contactando sobre ${p.address.split(',')[0]}...`);
-  }, [feedIndex, properties, showToast]);
+    if (!p) return;
+    handleContactChat(p.id);
+  }, [feedIndex, properties, handleContactChat]);
 
   const handleVideoShare = useCallback(() => {
     const p = properties[feedIndex];
     if (!p) return;
     if (navigator.share) {
-      navigator.share({ title: 'InstaProp — ' + p.address, text: p.price_display + ' en ' + p.address, url: location.href });
+      navigator.share({ title: 'InstaProp — ' + p.address, text: p.price_display, url: location.href });
     } else {
       navigator.clipboard?.writeText(p.price_display + ' en ' + p.address);
       showToast('📋 Link copiado');
@@ -135,6 +164,12 @@ export default function AppPage() {
     router.push('/');
   }, [router]);
 
+  const handleUserUpgrade = useCallback((newUser: User) => {
+    setUser(newUser);
+    localStorage.setItem('ip_u', JSON.stringify(newUser));
+    showToast('🎉 ¡Ahora sos vendedor!');
+  }, [showToast]);
+
   const ini = user?.name.substring(0, 2).toUpperCase() ?? '';
   const savedProperties = properties.filter(p => saved.includes(p.id));
 
@@ -149,7 +184,7 @@ export default function AppPage() {
         </div>
         <div className="atop-r">
           <button className="atop-btn" title="Notificaciones">🔔</button>
-          <div className="atop-av" onClick={() => setActiveTab('profile')}>{ini}</div>
+          <div className="atop-av" onClick={() => handleNavTap('profile')}>{ini}</div>
         </div>
       </div>
 
@@ -162,11 +197,17 @@ export default function AppPage() {
             saved={saved}
             onLike={handleLikeById}
             onSave={handleSaveById}
-            onContact={handleContactById}
+            onContactChat={handleContactChat}
+            scrollRef={homeScrollRef}
           />
         )}
 
-        {activeTab === 'messages' && <MessagesView />}
+        {activeTab === 'messages' && (
+          <MessagesView
+            openChat={openChatWith}
+            onChatOpened={() => setOpenChatWith(null)}
+          />
+        )}
 
         {activeTab === 'video' && properties.length > 0 && (
           <Feed
@@ -194,6 +235,7 @@ export default function AppPage() {
             savedProperties={savedProperties}
             onLogout={handleLogout}
             onSelectProperty={handleSelectProperty}
+            onUserUpgrade={handleUserUpgrade}
             onSavePrefs={prefs => {
               localStorage.setItem('ip_p', JSON.stringify(prefs));
               showToast('✓ Preferencias guardadas');
@@ -204,7 +246,7 @@ export default function AppPage() {
 
       {/* Bottom nav */}
       <div className="anav">
-        <button className={`ni ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+        <button className={`ni ${activeTab === 'home' ? 'active' : ''}`} onClick={() => handleNavTap('home')}>
           <span className="ni-i">
             <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'home' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
@@ -212,7 +254,7 @@ export default function AppPage() {
           </span>
           Inicio
         </button>
-        <button className={`ni ${activeTab === 'messages' ? 'active' : ''}`} onClick={() => setActiveTab('messages')}>
+        <button className={`ni ${activeTab === 'messages' ? 'active' : ''}`} onClick={() => handleNavTap('messages')}>
           <span className="ni-i">
             <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'messages' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -222,7 +264,7 @@ export default function AppPage() {
         </button>
 
         {/* CENTER KEY BUTTON */}
-        <button className="ni-center" onClick={() => setActiveTab('video')}>
+        <button className="ni-center" onClick={() => handleNavTap('video')}>
           <div className={`ni-center-btn ${activeTab === 'video' ? 'active' : ''}`}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
               <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
@@ -230,7 +272,7 @@ export default function AppPage() {
           </div>
         </button>
 
-        <button className={`ni ${activeTab === 'community' ? 'active' : ''}`} onClick={() => setActiveTab('community')}>
+        <button className={`ni ${activeTab === 'community' ? 'active' : ''}`} onClick={() => handleNavTap('community')}>
           <span className="ni-i">
             <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'community' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
@@ -238,7 +280,7 @@ export default function AppPage() {
           </span>
           Comunidad
         </button>
-        <button className={`ni ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
+        <button className={`ni ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => handleNavTap('profile')}>
           <span className="ni-i">
             <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'profile' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>

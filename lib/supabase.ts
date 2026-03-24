@@ -78,6 +78,15 @@ export async function getProperties(): Promise<Property[]> {
   }
 }
 
+export async function upgradeToSeller(userId: string) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ role: 'seller' })
+    .eq('id', userId);
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
 export async function insertProperty(prop: Omit<Property, 'id' | 'likes'>) {
   const { data, error } = await supabase
     .from('properties')
