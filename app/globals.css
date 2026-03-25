@@ -68,7 +68,7 @@ body::after{content:'';position:fixed;inset:0;z-index:99999;pointer-events:none;
 .hpost-nm{font-weight:600;font-size:.88rem;color:#111}
 .hpost-loc{font-size:.7rem;color:#888;margin-top:1px}
 .hpost-follow{padding:6px 14px;border-radius:6px;font-size:.78rem;font-weight:600;border:1.5px solid var(--accent);color:var(--accent);transition:var(--tr);background:none}.hpost-follow.ing{background:var(--accent);color:#fff}
-.hpost-car{position:relative;overflow:hidden;aspect-ratio:1/1;background:#f0f0f0}
+.hpost-car{position:relative;overflow:hidden;aspect-ratio:1/1;background:#f0f0f0;max-height:320px}
 .hpost-imgs{display:flex;height:100%;transition:transform .35s cubic-bezier(.23,1,.32,1)}
 .hpost-img{flex-shrink:0;width:100%;height:100%;background-size:cover;background-position:center}
 .hpost-arr{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:700;z-index:2;box-shadow:0 2px 8px rgba(0,0,0,.15);color:#333;line-height:1}.hpost-arr.left{left:10px}.hpost-arr.right{right:10px}
