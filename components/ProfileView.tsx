@@ -366,15 +366,68 @@ function SellerUpgradeFlow({ user, onClose, onConfirm }: {
   );
 }
 
+// ── Followers / Following list modal ─────────────────────────────────────────
+const MOCK_FOLLOWERS = [
+  { id: 1, name: 'Martina Rodríguez', ini: 'MR', grad: 'linear-gradient(135deg,#FF6B6B,#EE5A24)', mutual: true },
+  { id: 2, name: 'Lucas Felitti', ini: 'LF', grad: 'linear-gradient(135deg,#4ECDC4,#44BD32)', mutual: false },
+  { id: 3, name: 'Sofía González', ini: 'SG', grad: 'linear-gradient(135deg,#6C5CE7,#A29BFE)', mutual: true },
+  { id: 4, name: 'Tomás Bello', ini: 'TB', grad: 'linear-gradient(135deg,#F9CA24,#F0932B)', mutual: false },
+  { id: 5, name: 'Valentina Mora', ini: 'VM', grad: 'linear-gradient(135deg,#EB4D4B,#6C5CE7)', mutual: true },
+  { id: 6, name: 'Ramiro Pérez', ini: 'RP', grad: 'linear-gradient(135deg,#2979FF,#00B0FF)', mutual: false },
+];
+const MOCK_FOLLOWING = [
+  { id: 1, name: 'Palermo Prop.', ini: 'PP', grad: 'linear-gradient(135deg,#FF3322,#FF6B5B)', mutual: false },
+  { id: 2, name: 'Recoleta+', ini: 'R+', grad: 'linear-gradient(135deg,#F9CA24,#F0932B)', mutual: false },
+  { id: 3, name: 'NúñezHomes', ini: 'NH', grad: 'linear-gradient(135deg,#00B09B,#96C93D)', mutual: false },
+  { id: 4, name: 'Sofía González', ini: 'SG', grad: 'linear-gradient(135deg,#6C5CE7,#A29BFE)', mutual: true },
+];
+
+function FollowListModal({ title, list, onClose }: {
+  title: string;
+  list: typeof MOCK_FOLLOWERS;
+  onClose: () => void;
+}) {
+  const [following, setFollowing] = useState<number[]>([]);
+  return (
+    <div className="follow-modal-backdrop" onClick={onClose}>
+      <div className="follow-modal" onClick={e => e.stopPropagation()}>
+        <div className="follow-modal-hdr">
+          <button className="agent-back" onClick={onClose}>✕</button>
+          <span style={{ fontFamily: 'Syne', fontWeight: 700 }}>{title}</span>
+          <div style={{ width: 36 }} />
+        </div>
+        <div className="follow-modal-list">
+          {list.map(u => (
+            <div key={u.id} className="follow-modal-item">
+              <div className="follow-modal-av" style={{ background: u.grad }}>{u.ini}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: '.9rem', color: '#111' }}>{u.name}</div>
+                {u.mutual && <div style={{ fontSize: '.72rem', color: '#888', marginTop: 1 }}>Seguidor en común</div>}
+              </div>
+              <button
+                className={`rec-follow-btn ${following.includes(u.id) ? 'ing' : ''}`}
+                onClick={() => setFollowing(prev => prev.includes(u.id) ? prev.filter(x => x !== u.id) : [...prev, u.id])}
+              >
+                {following.includes(u.id) ? 'Siguiendo ✓' : '+ Seguir'}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type ProfileTab = 'posts' | 'saved' | 'prefs' | 'activity';
 
-export default function ProfileView({ user, viewed, likedCount, savedCount, savedProperties, onLogout, onSavePrefs, onSelectProperty, onUserUpgrade }: Props) {
+export default function ProfileView({ user, likedCount, savedProperties, onLogout, onSavePrefs, onSelectProperty, onUserUpgrade }: Props) {
   const ini = user.name.substring(0, 2).toUpperCase();
   const isSeller = user.role === 'seller';
   const [activeTab, setActiveTab] = useState<ProfileTab>(isSeller ? 'posts' : 'activity');
   const [showUpload, setShowUpload] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [followModal, setFollowModal] = useState<'followers' | 'following' | null>(null);
   const [sel, setSel] = useState<Record<string, string[]>>({ zones: [], types: [], rooms: [], features: [] });
   const [budget, setBudget] = useState(200000);
 
@@ -385,9 +438,6 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, save
     }));
   };
   const isOn = (group: string, val: string) => sel[group].includes(val);
-
-  const totalViews = MOCK_POSTS.reduce((s, p) => s + p.views, 0);
-  const totalLikes = MOCK_POSTS.reduce((s, p) => s + p.likes, 0);
 
   const sellerTabs: { key: ProfileTab; label: string }[] = [
     { key: 'posts', label: 'Publicaciones' },
@@ -405,6 +455,12 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, save
     <div className="pv">
       {showUpload && <UploadForm onDone={() => setShowUpload(false)} />}
       {showSettings && <SettingsMenu onClose={() => setShowSettings(false)} onLogout={onLogout} />}
+      {followModal === 'followers' && (
+        <FollowListModal title={`${MOCK_FOLLOWERS.length} seguidores`} list={MOCK_FOLLOWERS} onClose={() => setFollowModal(null)} />
+      )}
+      {followModal === 'following' && (
+        <FollowListModal title={`${MOCK_FOLLOWING.length} seguidos`} list={MOCK_FOLLOWING} onClose={() => setFollowModal(null)} />
+      )}
       {showUpgrade && (
         <SellerUpgradeFlow
           user={user}
@@ -438,26 +494,34 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, save
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats — always: publicaciones / seguidores / seguidos */}
         <div className="pstats">
-          {isSeller ? (
-            <>
-              <div className="pstat"><div className="pstat-n">{MOCK_POSTS.length}</div><div className="pstat-l">Publicaciones</div></div>
-              <div className="pstat-div" />
-              <div className="pstat"><div className="pstat-n">{(totalViews / 1000).toFixed(1)}K</div><div className="pstat-l">Vistas</div></div>
-              <div className="pstat-div" />
-              <div className="pstat"><div className="pstat-n">{totalLikes}</div><div className="pstat-l">Likes</div></div>
-            </>
-          ) : (
-            <>
-              <div className="pstat"><div className="pstat-n">{viewed}</div><div className="pstat-l">Vistos</div></div>
-              <div className="pstat-div" />
-              <div className="pstat"><div className="pstat-n">{likedCount}</div><div className="pstat-l">Likes</div></div>
-              <div className="pstat-div" />
-              <div className="pstat"><div className="pstat-n">{savedCount}</div><div className="pstat-l">Guardados</div></div>
-            </>
-          )}
+          <div className="pstat">
+            <div className="pstat-n">{isSeller ? MOCK_POSTS.length : likedCount}</div>
+            <div className="pstat-l">Publicaciones</div>
+          </div>
+          <div className="pstat-div" />
+          <button className="pstat pstat-tap" onClick={() => setFollowModal('followers')}>
+            <div className="pstat-n">{MOCK_FOLLOWERS.length}</div>
+            <div className="pstat-l">Seguidores</div>
+          </button>
+          <div className="pstat-div" />
+          <button className="pstat pstat-tap" onClick={() => setFollowModal('following')}>
+            <div className="pstat-n">{MOCK_FOLLOWING.length}</div>
+            <div className="pstat-l">Seguidos</div>
+          </button>
         </div>
+        {/* Seguidores en común (shown when visiting others — mock) */}
+        {isSeller && (
+          <div className="mutual-followers">
+            {MOCK_FOLLOWERS.filter(f => f.mutual).slice(0, 2).map(f => (
+              <div key={f.id} className="mutual-av" style={{ background: f.grad }}>{f.ini}</div>
+            ))}
+            <span className="mutual-text">
+              Seguido por {MOCK_FOLLOWERS.filter(f => f.mutual).map(f => f.name.split(' ')[0]).slice(0, 2).join(', ')} y {MOCK_FOLLOWERS.filter(f => f.mutual).length - 2} más
+            </span>
+          </div>
+        )}
 
         {/* Seller CTA or upgrade */}
         {isSeller ? (
