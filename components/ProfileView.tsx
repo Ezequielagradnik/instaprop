@@ -29,7 +29,6 @@ const PROP_TYPES = [
   { val: 'loft', label: 'Loft' },
 ];
 
-// Mock seller posts with metrics
 const MOCK_POSTS = [
   { id: 1, img: 'https://picsum.photos/id/1029/400/400', price: 'USD 185.000', addr: 'Thames 1842', views: 4230, likes: 89 },
   { id: 2, img: 'https://picsum.photos/id/1048/400/400', price: 'USD 245.000', addr: 'Libertador 3200', views: 1820, likes: 45 },
@@ -122,7 +121,7 @@ function UploadForm({ onDone }: { onDone: () => void }) {
             )}
           </div>
 
-          <input className="inp" placeholder="URL de imagen (mientras tanto)" value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
+          <input className="inp" placeholder="URL de imagen" value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
           <input className="inp" placeholder="Dirección (ej: Thames 1842, Palermo)" value={address} onChange={e => setAddress(e.target.value)} />
           <div className="up-row">
             <select className="inp" value={neighborhood} onChange={e => setNeighborhood(e.target.value)}>
@@ -163,6 +162,210 @@ function SettingsMenu({ onClose, onLogout }: { onClose: () => void; onLogout: ()
   );
 }
 
+// ── Full seller upgrade flow ──────────────────────────────────────────────────
+interface UpgradeFormData {
+  businessName: string;
+  sellerType: 'inmobiliaria' | 'particular' | 'desarrollador';
+  zone: string;
+  phone: string;
+  professionalEmail: string;
+  bio: string;
+  profileImg: string;
+  coverImg: string;
+}
+
+type UpgradeStep = 'form' | 'preview' | 'done';
+
+function SellerUpgradeFlow({ user, onClose, onConfirm }: {
+  user: User;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const [step, setStep] = useState<UpgradeStep>('form');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [data, setData] = useState<UpgradeFormData>({
+    businessName: user.name,
+    sellerType: 'inmobiliaria',
+    zone: 'Palermo',
+    phone: '',
+    professionalEmail: user.email,
+    bio: '',
+    profileImg: '',
+    coverImg: '',
+  });
+
+  function set(k: keyof UpgradeFormData, v: string) {
+    setData(prev => ({ ...prev, [k]: v }));
+  }
+
+  function validateForm() {
+    if (!data.businessName.trim()) return 'El nombre o razón social es obligatorio';
+    if (!data.phone.trim()) return 'El teléfono de contacto es obligatorio';
+    if (!data.professionalEmail.trim()) return 'El email profesional es obligatorio';
+    return '';
+  }
+
+  async function handleConfirm() {
+    setLoading(true);
+    const { error: err } = await upgradeToSeller(user.id) as { error?: string; success?: boolean };
+    setLoading(false);
+    if (err) { setError(err); return; }
+    setStep('done');
+    setTimeout(onConfirm, 1500);
+  }
+
+  if (step === 'done') {
+    return (
+      <div className="upgrade-flow">
+        <div className="upgrade-flow-inner" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
+          <div style={{ fontSize: '4rem', marginBottom: 16 }}>🎉</div>
+          <div style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: '1.4rem', marginBottom: 8 }}>¡Bienvenido como vendedor!</div>
+          <div style={{ color: '#666', fontSize: '.9rem' }}>Tu perfil profesional está activo.</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'preview') {
+    return (
+      <div className="upgrade-flow">
+        <div className="upgrade-flow-inner">
+          <div className="upgrade-flow-hdr">
+            <button className="agent-back" onClick={() => setStep('form')}>‹</button>
+            <span style={{ fontFamily: 'Syne', fontWeight: 700 }}>Vista previa del perfil</span>
+            <div style={{ width: 36 }} />
+          </div>
+
+          {/* Cover */}
+          <div className="seller-preview-cover" style={{
+            backgroundImage: data.coverImg ? `url('${data.coverImg}')` : 'linear-gradient(135deg,var(--accent),#aa00ff)',
+          }} />
+
+          {/* Avatar */}
+          <div className="seller-preview-av-wrap">
+            <div className="seller-preview-av" style={{
+              backgroundImage: data.profileImg ? `url('${data.profileImg}')` : undefined,
+              background: data.profileImg ? undefined : 'linear-gradient(135deg,var(--accent),var(--purple))',
+            }}>
+              {!data.profileImg && user.name.substring(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '1.1rem' }}>{data.businessName}</span>
+                <span className="trust-verified-sm" style={{ fontSize: '1rem' }}>✓</span>
+              </div>
+              <div style={{ fontSize: '.8rem', color: '#888' }}>
+                {data.sellerType === 'inmobiliaria' ? '🏢 Inmobiliaria' : data.sellerType === 'desarrollador' ? '🏗 Desarrollador' : '👤 Particular'} · 📍 {data.zone}
+              </div>
+            </div>
+          </div>
+
+          {data.bio && <div style={{ padding: '0 20px 16px', fontSize: '.88rem', color: '#555', lineHeight: 1.5 }}>{data.bio}</div>}
+
+          <div className="seller-preview-contact">
+            <div style={{ fontSize: '.82rem', color: '#555' }}>📱 {data.phone}</div>
+            <div style={{ fontSize: '.82rem', color: '#555' }}>✉️ {data.professionalEmail}</div>
+          </div>
+
+          {error && <div className="up-msg err" style={{ margin: '0 16px 8px' }}>{error}</div>}
+
+          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, marginTop: 'auto' }}>
+            <button className="btn-p" style={{ width: '100%' }} onClick={handleConfirm} disabled={loading}>
+              {loading ? 'Activando...' : '✅ Confirmar y activar perfil'}
+            </button>
+            <button onClick={() => setStep('form')} style={{ width: '100%', padding: 14, background: 'none', border: '1.5px solid rgba(0,0,0,.12)', borderRadius: 50, fontWeight: 600, cursor: 'pointer', color: '#333' }}>
+              Editar datos
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // step === 'form'
+  return (
+    <div className="upgrade-flow">
+      <div className="upgrade-flow-inner">
+        <div className="upgrade-flow-hdr">
+          <button className="agent-back" onClick={onClose}>✕</button>
+          <span style={{ fontFamily: 'Syne', fontWeight: 700 }}>Cambiar a vendedor</span>
+          <div style={{ width: 36 }} />
+        </div>
+
+        <div className="upgrade-flow-body">
+          <div className="upgrade-flow-section">
+            <div className="upgrade-section-label">Tipo de cuenta</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['inmobiliaria', 'particular', 'desarrollador'] as const).map(t => (
+                <button
+                  key={t}
+                  className={`upgrade-type-btn ${data.sellerType === t ? 'active' : ''}`}
+                  onClick={() => set('sellerType', t)}
+                >
+                  {t === 'inmobiliaria' ? '🏢 Inmobiliaria' : t === 'desarrollador' ? '🏗 Desarrollador' : '👤 Particular'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="upgrade-flow-section">
+            <div className="upgrade-section-label">Nombre o razón social *</div>
+            <input className="inp" placeholder="Ej: García Propiedades" value={data.businessName} onChange={e => set('businessName', e.target.value)} />
+          </div>
+
+          <div className="upgrade-flow-section">
+            <div className="upgrade-section-label">Zona de trabajo *</div>
+            <select className="inp" value={data.zone} onChange={e => set('zone', e.target.value)}>
+              {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+            </select>
+          </div>
+
+          <div className="upgrade-flow-section">
+            <div className="upgrade-section-label">Teléfono de contacto *</div>
+            <input className="inp" placeholder="+54 11 1234-5678" value={data.phone} onChange={e => set('phone', e.target.value)} type="tel" />
+          </div>
+
+          <div className="upgrade-flow-section">
+            <div className="upgrade-section-label">Email profesional *</div>
+            <input className="inp" placeholder="info@tupropiedades.com" value={data.professionalEmail} onChange={e => set('professionalEmail', e.target.value)} type="email" />
+          </div>
+
+          <div className="upgrade-flow-section">
+            <div className="upgrade-section-label">Descripción del perfil</div>
+            <textarea className="inp up-desc" placeholder="Contá brevemente quién sos y en qué zonas trabajás..." value={data.bio} onChange={e => set('bio', e.target.value)} rows={3} />
+          </div>
+
+          <div className="upgrade-flow-section">
+            <div className="upgrade-section-label">Foto de perfil (URL, opcional)</div>
+            <input className="inp" placeholder="https://..." value={data.profileImg} onChange={e => set('profileImg', e.target.value)} />
+          </div>
+
+          <div className="upgrade-flow-section">
+            <div className="upgrade-section-label">Imagen de portada (URL, opcional)</div>
+            <input className="inp" placeholder="https://..." value={data.coverImg} onChange={e => set('coverImg', e.target.value)} />
+          </div>
+
+          {error && <div className="up-msg err">{error}</div>}
+
+          <button
+            className="btn-p"
+            style={{ width: '100%', marginTop: 8 }}
+            onClick={() => {
+              const err = validateForm();
+              if (err) { setError(err); return; }
+              setError('');
+              setStep('preview');
+            }}
+          >
+            Vista previa del perfil →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type ProfileTab = 'posts' | 'saved' | 'prefs' | 'activity';
 
 export default function ProfileView({ user, viewed, likedCount, savedCount, savedProperties, onLogout, onSavePrefs, onSelectProperty, onUserUpgrade }: Props) {
@@ -171,8 +374,7 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, save
   const [activeTab, setActiveTab] = useState<ProfileTab>(isSeller ? 'posts' : 'activity');
   const [showUpload, setShowUpload] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const [sel, setSel] = useState<Record<string, string[]>>({ zones: [], types: [], rooms: [], features: [] });
   const [budget, setBudget] = useState(200000);
 
@@ -184,16 +386,8 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, save
   };
   const isOn = (group: string, val: string) => sel[group].includes(val);
 
-  async function handleUpgrade() {
-    setUpgrading(true);
-    const result = await upgradeToSeller(user.id);
-    setUpgrading(false);
-    if ('error' in result && result.error) return;
-    const newUser = { ...user, role: 'seller' as const };
-    onUserUpgrade(newUser);
-    setShowUpgradeConfirm(false);
-    setActiveTab('posts');
-  }
+  const totalViews = MOCK_POSTS.reduce((s, p) => s + p.views, 0);
+  const totalLikes = MOCK_POSTS.reduce((s, p) => s + p.likes, 0);
 
   const sellerTabs: { key: ProfileTab; label: string }[] = [
     { key: 'posts', label: 'Publicaciones' },
@@ -207,13 +401,20 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, save
   ];
   const tabs = isSeller ? sellerTabs : buyerTabs;
 
-  const totalViews = MOCK_POSTS.reduce((s, p) => s + p.views, 0);
-  const totalLikes = MOCK_POSTS.reduce((s, p) => s + p.likes, 0);
-
   return (
     <div className="pv">
       {showUpload && <UploadForm onDone={() => setShowUpload(false)} />}
       {showSettings && <SettingsMenu onClose={() => setShowSettings(false)} onLogout={onLogout} />}
+      {showUpgrade && (
+        <SellerUpgradeFlow
+          user={user}
+          onClose={() => setShowUpgrade(false)}
+          onConfirm={() => {
+            setShowUpgrade(false);
+            onUserUpgrade({ ...user, role: 'seller' });
+          }}
+        />
+      )}
 
       {/* Header */}
       <div className="phdr">
@@ -228,7 +429,10 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, save
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '0 4px 16px' }}>
           <div className="pav">{ini}</div>
           <div style={{ flex: 1 }}>
-            <div className="pnm">{user.name}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="pnm">{user.name}</div>
+              {isSeller && <span className="trust-verified-sm" style={{ fontSize: '1rem' }}>✓</span>}
+            </div>
             <div className="pem">{user.email}</div>
             {isSeller && <div className="prole">🏢 Vendedor / Inmobiliaria</div>}
           </div>
@@ -267,31 +471,9 @@ export default function ProfileView({ user, viewed, likedCount, savedCount, save
           </div>
         ) : (
           <div style={{ marginTop: 14 }}>
-            <button
-              className="upgrade-btn"
-              onClick={() => setShowUpgradeConfirm(true)}
-            >
+            <button className="upgrade-btn" onClick={() => setShowUpgrade(true)}>
               🏢 Cambiar a cuenta vendedor
             </button>
-          </div>
-        )}
-
-        {/* Upgrade confirm */}
-        {showUpgradeConfirm && (
-          <div className="upgrade-modal">
-            <div className="upgrade-modal-box">
-              <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏢</div>
-              <div style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '1.1rem', marginBottom: 8 }}>Cambiar a vendedor</div>
-              <div style={{ fontSize: '.85rem', color: '#666', marginBottom: 20, lineHeight: 1.5 }}>
-                Al cambiar desbloquearás la publicación de propiedades, estadísticas y herramientas para inmobiliarias.
-              </div>
-              <button className="btn-p" style={{ width: '100%' }} onClick={handleUpgrade} disabled={upgrading}>
-                {upgrading ? 'Cambiando...' : 'Confirmar cambio'}
-              </button>
-              <button onClick={() => setShowUpgradeConfirm(false)} style={{ marginTop: 10, width: '100%', padding: '10px', background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '.85rem' }}>
-                Cancelar
-              </button>
-            </div>
           </div>
         )}
 

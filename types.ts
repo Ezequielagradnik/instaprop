@@ -5,6 +5,7 @@ export interface Property {
   address: string;
   neighborhood: string;
   type: 'monoambiente' | '2amb' | '3amb' | 'casa' | 'ph' | 'loft';
+  operation_type?: 'venta' | 'alquiler' | 'temporario';
   bedrooms: number | null;
   area_m2: number | null;
   badge: string;
@@ -15,6 +16,11 @@ export interface Property {
   gradient: string;
   likes: number;
   featured: boolean;
+  // Trust / extras
+  verified?: boolean;
+  response_time?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface User {
@@ -32,5 +38,6 @@ export interface UserPrefs {
   budget: number;
 }
 
-export type Tab = 'home' | 'messages' | 'video' | 'community' | 'profile';
+export type Tab = 'home' | 'messages' | 'video' | 'community' | 'profile' | 'map';
 export type FilterType = 'all' | 'mono' | '2amb' | '3amb' | 'casa' | 'lujo';
+export type OperationType = 'venta' | 'alquiler' | 'temporario';

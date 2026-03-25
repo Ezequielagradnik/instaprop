@@ -8,7 +8,8 @@ import Feed from '../../components/Feed';
 import MessagesView, { type OpenChatData } from '../../components/MessagesView';
 import CommunityView from '../../components/CommunityView';
 import ProfileView from '../../components/ProfileView';
-import type { Property, User, Tab } from '../../types';
+import MapView from '../../components/MapView';
+import type { Property, User, Tab, OperationType } from '../../types';
 
 export default function AppPage() {
   const router = useRouter();
@@ -21,9 +22,49 @@ export default function AppPage() {
   const [viewed, setViewed] = useState(0);
   const [toast, setToast] = useState('');
   const [openChatWith, setOpenChatWith] = useState<OpenChatData | null>(null);
+  const [operationType, setOperationType] = useState<OperationType>('venta');
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastTabTap = useRef<{ tab: Tab; time: number }>({ tab: 'home', time: 0 });
   const homeScrollRef = useRef<HTMLDivElement>(null);
+
+  // Recommendation: weight properties by viewed/liked/saved interaction
+  const scoredProperties = useCallback((props: Property[]) => {
+    const likedSet = new Set(liked);
+    const savedSet = new Set(saved);
+    const likedNeighborhoods = new Set(
+      props.filter(p => likedSet.has(p.id)).map(p => p.neighborhood)
+    );
+    const savedNeighborhoods = new Set(
+      props.filter(p => savedSet.has(p.id)).map(p => p.neighborhood)
+    );
+    return [...props].sort((a, b) => {
+      let sa = a.match_score;
+      let sb = b.match_score;
+      if (likedNeighborhoods.has(a.neighborhood)) sa += 20;
+      if (likedNeighborhoods.has(b.neighborhood)) sb += 20;
+      if (savedNeighborhoods.has(a.neighborhood)) sa += 15;
+      if (savedNeighborhoods.has(b.neighborhood)) sb += 15;
+      if (likedSet.has(a.id)) sa -= 10; // already seen
+      if (likedSet.has(b.id)) sb -= 10;
+      return sb - sa;
+    });
+  }, [liked, saved]);
+
+  // Filter by operation type
+  const filteredByOperation = useCallback((props: Property[]) => {
+    // Assign mock operation_type if missing (distribute evenly)
+    const ops: OperationType[] = ['venta', 'alquiler', 'temporario'];
+    const withOp = props.map((p, i) => ({
+      ...p,
+      operation_type: p.operation_type ?? ops[i % 3],
+    }));
+    return withOp.filter(p => p.operation_type === operationType);
+  }, [operationType]);
+
+  const visibleProperties = useCallback(() => {
+    const filtered = filteredByOperation(scoredProperties(properties));
+    return filtered.length > 0 ? filtered : properties; // fallback to all
+  }, [properties, filteredByOperation, scoredProperties]);
 
   useEffect(() => {
     async function init() {
@@ -51,7 +92,6 @@ export default function AppPage() {
     toastTimer.current = setTimeout(() => setToast(''), 2500);
   }, []);
 
-  // Double-tap nav: same tab tapped twice fast → reset
   const handleNavTap = useCallback((tab: Tab) => {
     const now = Date.now();
     if (activeTab === tab && now - lastTabTap.current.time < 350) {
@@ -68,21 +108,22 @@ export default function AppPage() {
     setActiveTab(tab);
   }, [activeTab, showToast]);
 
-  // Video feed
+  const props = visibleProperties();
+
   const next = useCallback(() => {
     setFeedIndex(i => {
-      const n = i < properties.length - 1 ? i + 1 : 0;
+      const n = i < props.length - 1 ? i + 1 : 0;
       const v = viewed + 1;
       setViewed(v);
       localStorage.setItem('ip_v', String(v));
       return n;
     });
-  }, [properties.length, viewed]);
+  }, [props.length, viewed]);
 
   const prev = useCallback(() => setFeedIndex(i => Math.max(0, i - 1)), []);
 
   const handleVideoLike = useCallback(() => {
-    const p = properties[feedIndex];
+    const p = props[feedIndex];
     if (!p) return;
     setLiked(prev => {
       const next = prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id];
@@ -90,10 +131,10 @@ export default function AppPage() {
       showToast(next.includes(p.id) ? '❤️ ¡Te gustó!' : '');
       return next;
     });
-  }, [feedIndex, properties, showToast]);
+  }, [feedIndex, props, showToast]);
 
   const handleVideoSave = useCallback(() => {
-    const p = properties[feedIndex];
+    const p = props[feedIndex];
     if (!p) return;
     setSaved(prev => {
       const wasSaved = prev.includes(p.id);
@@ -102,9 +143,8 @@ export default function AppPage() {
       showToast(wasSaved ? '🗑 Eliminado' : '🔖 Guardado');
       return next;
     });
-  }, [feedIndex, properties, showToast]);
+  }, [feedIndex, props, showToast]);
 
-  // Home feed (ID-based)
   const handleLikeById = useCallback((id: number) => {
     setLiked(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
@@ -123,7 +163,6 @@ export default function AppPage() {
     });
   }, [showToast]);
 
-  // Contact → opens Messages with pre-loaded chat
   const handleContactChat = useCallback((id: number) => {
     const p = properties.find(x => x.id === id);
     if (!p) return;
@@ -137,13 +176,13 @@ export default function AppPage() {
   }, [properties]);
 
   const handleVideoContact = useCallback(() => {
-    const p = properties[feedIndex];
+    const p = props[feedIndex];
     if (!p) return;
     handleContactChat(p.id);
-  }, [feedIndex, properties, handleContactChat]);
+  }, [feedIndex, props, handleContactChat]);
 
   const handleVideoShare = useCallback(() => {
-    const p = properties[feedIndex];
+    const p = props[feedIndex];
     if (!p) return;
     if (navigator.share) {
       navigator.share({ title: 'InstaProp — ' + p.address, text: p.price_display, url: location.href });
@@ -151,12 +190,12 @@ export default function AppPage() {
       navigator.clipboard?.writeText(p.price_display + ' en ' + p.address);
       showToast('📋 Link copiado');
     }
-  }, [feedIndex, properties, showToast]);
+  }, [feedIndex, props, showToast]);
 
   const handleSelectProperty = useCallback((id: number) => {
-    const idx = properties.findIndex(p => p.id === id);
+    const idx = props.findIndex(p => p.id === id);
     if (idx >= 0) { setFeedIndex(idx); setActiveTab('video'); }
-  }, [properties]);
+  }, [props]);
 
   const handleLogout = useCallback(async () => {
     await signOut();
@@ -183,6 +222,18 @@ export default function AppPage() {
           <span className="logo-d" />InstaProp
         </div>
         <div className="atop-r">
+          {/* Operation type selector */}
+          <div className="op-selector">
+            {(['venta', 'alquiler', 'temporario'] as OperationType[]).map(op => (
+              <button
+                key={op}
+                className={`op-btn ${operationType === op ? 'active' : ''}`}
+                onClick={() => { setOperationType(op); setFeedIndex(0); }}
+              >
+                {op === 'venta' ? 'Venta' : op === 'alquiler' ? 'Alquiler' : 'Temp.'}
+              </button>
+            ))}
+          </div>
           <button className="atop-btn" title="Notificaciones">🔔</button>
           <div className="atop-av" onClick={() => handleNavTap('profile')}>{ini}</div>
         </div>
@@ -192,13 +243,15 @@ export default function AppPage() {
       <div className="acontent">
         {activeTab === 'home' && (
           <HomeFeed
-            properties={properties}
+            properties={props}
             liked={liked}
             saved={saved}
             onLike={handleLikeById}
             onSave={handleSaveById}
             onContactChat={handleContactChat}
             scrollRef={homeScrollRef}
+            operationType={operationType}
+            onOperationChange={(op) => { setOperationType(op); setFeedIndex(0); }}
           />
         )}
 
@@ -209,9 +262,9 @@ export default function AppPage() {
           />
         )}
 
-        {activeTab === 'video' && properties.length > 0 && (
+        {activeTab === 'video' && (
           <Feed
-            properties={properties}
+            properties={props.length > 0 ? props : properties}
             currentIndex={feedIndex}
             liked={liked}
             saved={saved}
@@ -225,6 +278,17 @@ export default function AppPage() {
         )}
 
         {activeTab === 'community' && <CommunityView />}
+
+        {activeTab === 'map' && (
+          <MapView
+            properties={properties}
+            liked={liked}
+            saved={saved}
+            operationType={operationType}
+            onContact={handleContactChat}
+            onSelectProperty={handleSelectProperty}
+          />
+        )}
 
         {activeTab === 'profile' && (
           <ProfileView
@@ -272,13 +336,13 @@ export default function AppPage() {
           </div>
         </button>
 
-        <button className={`ni ${activeTab === 'community' ? 'active' : ''}`} onClick={() => handleNavTap('community')}>
+        <button className={`ni ${activeTab === 'map' ? 'active' : ''}`} onClick={() => handleNavTap('map')}>
           <span className="ni-i">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'community' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'map' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
+              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
             </svg>
           </span>
-          Comunidad
+          Mapa
         </button>
         <button className={`ni ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => handleNavTap('profile')}>
           <span className="ni-i">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useMemo } from 'react';
-import type { Property } from '../types';
+import type { Property, OperationType } from '../types';
 import AgentProfileModal, { type AgentInfo } from './AgentProfileModal';
 
 const STORIES = [
@@ -23,8 +23,11 @@ export const AGENT_GRADS = [
   'linear-gradient(135deg,#EB4D4B,#6C5CE7)',
 ];
 
-const FILTERS = ['Todo', 'Palermo', 'Belgrano', 'Recoleta', 'Núñez', 'Villa Crespo', 'Caballito'];
+const ZONES = ['Todo', 'Palermo', 'Belgrano', 'Recoleta', 'Núñez', 'Villa Crespo', 'Caballito', 'Villa Urquiza', 'Almagro'];
 const TYPE_FILTERS = ['Todos', 'Monoamb.', '2 amb', '3 amb', 'Casa', 'PH'];
+const FEATURES_FILTER = ['Cochera', 'Balcón', 'Terraza', 'Pileta', 'Amoblado', 'Mascotas', 'Apto cred.', 'Apto prof.'];
+
+const RESPONSE_TIMES = ['Responde en 1h', 'Responde rápido', 'Activo hoy', 'Activo esta semana'];
 
 interface PostProps {
   property: Property;
@@ -58,8 +61,13 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
   const agentName = p.neighborhood + ' Propiedades';
   const grad = AGENT_GRADS[p.id % AGENT_GRADS.length];
   const ini = p.neighborhood.substring(0, 2).toUpperCase();
-
   const agent: AgentInfo = { name: agentName, ini, grad, neighborhood: p.neighborhood };
+
+  // Mock trust data
+  const responseTime = RESPONSE_TIMES[p.id % RESPONSE_TIMES.length];
+  const isVerified = p.verified ?? (p.id % 3 !== 0); // most are verified in mock
+  const opLabel = p.operation_type === 'alquiler' ? 'Alquiler' : p.operation_type === 'temporario' ? 'Temporario' : 'Venta';
+  const opColor = p.operation_type === 'alquiler' ? '#2979FF' : p.operation_type === 'temporario' ? '#FF9500' : '#00C853';
 
   function handleLike() {
     setLocalLikes(n => liked ? n - 1 : n + 1);
@@ -82,8 +90,12 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
         >
           <div className="hpost-av" style={{ background: grad }}>{ini}</div>
           <div style={{ textAlign: 'left' }}>
-            <div className="hpost-nm">{agentName}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div className="hpost-nm">{agentName}</div>
+              {isVerified && <span className="trust-verified-sm">✓</span>}
+            </div>
             <div className="hpost-loc">📍 {p.neighborhood} · {p.badge}</div>
+            <div className="trust-response-sm">⚡ {responseTime}</div>
           </div>
         </button>
         <button className={`hpost-follow ${following ? 'ing' : ''}`} onClick={() => setFollowing(v => !v)}>
@@ -116,6 +128,8 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
           {images.map((_, i) => <div key={i} className={`hpost-dot ${i === imgIdx ? 'act' : ''}`} />)}
         </div>
         <div className="hpost-match">⚡ {p.match_score}% match</div>
+        {/* Operation type badge */}
+        <div className="hpost-op-badge" style={{ background: opColor + '22', color: opColor, borderColor: opColor + '55' }}>{opLabel}</div>
       </div>
 
       {/* Actions */}
@@ -132,7 +146,7 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
             </svg>
           </button>
           {/* Phone → opens chat directly */}
-          <button className="hact" onClick={onContact}>
+          <button className="hact hact-contact" onClick={onContact}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
             </svg>
@@ -164,7 +178,7 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
         </button>
       </div>
 
-      {/* Comments */}
+      {/* Inline comments */}
       {showComments && (
         <div className="hpost-cmts">
           {comments.map(c => (
@@ -187,6 +201,13 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
           </div>
         </div>
       )}
+
+      {/* Always-visible contact CTA */}
+      <div className="hpost-contact-bar">
+        <button className="hpost-contact-btn" onClick={onContact}>
+          💬 Contactar al vendedor
+        </button>
+      </div>
     </article>
   );
 }
@@ -199,21 +220,33 @@ interface Props {
   onSave: (id: number) => void;
   onContactChat: (id: number) => void;
   scrollRef?: React.RefObject<HTMLDivElement>;
+  operationType: OperationType;
+  onOperationChange: (op: OperationType) => void;
 }
 
-export default function HomeFeed({ properties, liked, saved, onLike, onSave, onContactChat, scrollRef }: Props) {
+export default function HomeFeed({ properties, liked, saved, onLike, onSave, onContactChat, scrollRef, operationType, onOperationChange }: Props) {
   const [seenStories, setSeenStories] = useState<number[]>([3, 5, 7]);
   const [openStory, setOpenStory] = useState<typeof STORIES[0] | null>(null);
   const [storyProgress, setStoryProgress] = useState(0);
   const [agentModal, setAgentModal] = useState<AgentInfo | null>(null);
-  const [showSearch, setShowSearch] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('Todo');
+  const [activeZone, setActiveZone] = useState('Todo');
   const [activeType, setActiveType] = useState('Todos');
+  const [activeFeatures, setActiveFeatures] = useState<string[]>([]);
+  const [priceMin, setPriceMin] = useState(0);
+  const [priceMax, setPriceMax] = useState(500000);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  function toggleFeature(f: string) {
+    setActiveFeatures(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
+  }
+
+  const hasActiveFilters = activeZone !== 'Todo' || activeType !== 'Todos' || activeFeatures.length > 0 || searchQuery || priceMin > 0 || priceMax < 500000;
 
   const filtered = useMemo(() => {
     return properties.filter(p => {
-      const matchZone = activeFilter === 'Todo' || p.neighborhood === activeFilter;
+      const matchZone = activeZone === 'Todo' || p.neighborhood === activeZone;
       const matchType = activeType === 'Todos' ||
         (activeType === 'Monoamb.' && p.type === 'monoambiente') ||
         (activeType === '2 amb' && p.type === '2amb') ||
@@ -223,9 +256,13 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
       const matchSearch = !searchQuery || p.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.neighborhood.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.description.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchZone && matchType && matchSearch;
+      const matchPrice = p.price_usd >= priceMin && p.price_usd <= priceMax;
+      const matchFeatures = activeFeatures.length === 0 || activeFeatures.every(f =>
+        p.tags.some(t => t.toLowerCase().includes(f.toLowerCase()))
+      );
+      return matchZone && matchType && matchSearch && matchPrice && matchFeatures;
     });
-  }, [properties, activeFilter, activeType, searchQuery]);
+  }, [properties, activeZone, activeType, searchQuery, priceMin, priceMax, activeFeatures]);
 
   function handleStory(s: typeof STORIES[0]) {
     setOpenStory(s);
@@ -239,17 +276,27 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
     }, 50);
   }
 
+  function clearFilters() {
+    setSearchQuery('');
+    setActiveZone('Todo');
+    setActiveType('Todos');
+    setActiveFeatures([]);
+    setPriceMin(0);
+    setPriceMax(500000);
+  }
+
   return (
     <div className="hv" ref={scrollRef}>
       {/* Search header */}
       <div className="home-search-bar">
-        <div className="home-search-inner" onClick={() => setShowSearch(v => !v)}>
+        <div className="home-search-inner" onClick={() => setShowFilters(v => !v)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
-          <span style={{ color: '#aaa', fontSize: '.9rem', flex: 1 }}>
+          <span style={{ color: searchQuery ? '#111' : '#aaa', fontSize: '.9rem', flex: 1 }}>
             {searchQuery || 'Buscar propiedades...'}
           </span>
+          {hasActiveFilters && <span className="filter-active-dot" />}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2">
             <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
           </svg>
@@ -257,7 +304,7 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
       </div>
 
       {/* Filters panel */}
-      {showSearch && (
+      {showFilters && (
         <div className="home-filters">
           <input
             autoFocus
@@ -266,14 +313,18 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
+
+          {/* Quick zone chips */}
           <div className="home-filter-row">
             <span className="home-filter-label">Zona</span>
             <div className="home-filter-chips">
-              {FILTERS.map(f => (
-                <button key={f} className={`hfilt ${activeFilter === f ? 'act' : ''}`} onClick={() => setActiveFilter(f)}>{f}</button>
+              {ZONES.map(f => (
+                <button key={f} className={`hfilt ${activeZone === f ? 'act' : ''}`} onClick={() => setActiveZone(f)}>{f}</button>
               ))}
             </div>
           </div>
+
+          {/* Type chips */}
           <div className="home-filter-row">
             <span className="home-filter-label">Tipo</span>
             <div className="home-filter-chips">
@@ -282,8 +333,50 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
               ))}
             </div>
           </div>
-          {(searchQuery || activeFilter !== 'Todo' || activeType !== 'Todos') && (
-            <button className="home-filter-clear" onClick={() => { setSearchQuery(''); setActiveFilter('Todo'); setActiveType('Todos'); }}>
+
+          {/* Advanced toggle */}
+          <button className="home-filter-advanced-toggle" onClick={() => setShowAdvanced(v => !v)}>
+            {showAdvanced ? '▲ Menos filtros' : '▼ Más filtros'}
+          </button>
+
+          {showAdvanced && (
+            <>
+              {/* Price range */}
+              <div className="home-filter-row">
+                <span className="home-filter-label">💰 Precio (USD)</span>
+                <div className="hfilt-price-row">
+                  <input className="hfilt-price-inp" type="number" placeholder="Mín" value={priceMin || ''} onChange={e => setPriceMin(+e.target.value || 0)} />
+                  <span style={{ color: '#aaa' }}>—</span>
+                  <input className="hfilt-price-inp" type="number" placeholder="Máx" value={priceMax >= 500000 ? '' : priceMax} onChange={e => setPriceMax(+e.target.value || 500000)} />
+                </div>
+              </div>
+
+              {/* Features */}
+              <div className="home-filter-row">
+                <span className="home-filter-label">✨ Características</span>
+                <div className="home-filter-chips">
+                  {FEATURES_FILTER.map(f => (
+                    <button key={f} className={`hfilt ${activeFeatures.includes(f) ? 'act' : ''}`} onClick={() => toggleFeature(f)}>{f}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Temp-specific */}
+              {operationType === 'temporario' && (
+                <div className="home-filter-row">
+                  <span className="home-filter-label">📅 Alquiler temporario</span>
+                  <div className="home-filter-chips">
+                    {['Por noche', 'Por semana', 'Por mes', 'WiFi incluido', 'Cocina', 'Ropa de cama'].map(f => (
+                      <button key={f} className={`hfilt ${activeFeatures.includes(f) ? 'act' : ''}`} onClick={() => toggleFeature(f)}>{f}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {hasActiveFilters && (
+            <button className="home-filter-clear" onClick={clearFilters}>
               Limpiar filtros · {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
             </button>
           )}
@@ -301,18 +394,23 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
           </button>
         ))}
       </div>
-
       <div className="stories-divider" />
+
+      {/* Results count when filtering */}
+      {hasActiveFilters && (
+        <div className="home-results-bar">
+          <span>{filtered.length} propiedad{filtered.length !== 1 ? 'es' : ''} · {operationType === 'venta' ? 'Venta' : operationType === 'alquiler' ? 'Alquiler' : 'Temporario'}</span>
+          <button onClick={clearFilters} style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '.8rem', background: 'none', border: 'none', cursor: 'pointer' }}>Limpiar</button>
+        </div>
+      )}
 
       {/* Posts */}
       <div className="hposts">
         {filtered.length === 0 ? (
-          <div className="xempty" style={{ background: '#fff', padding: '60px 20px' }}>
-            <div className="ico">🔍</div>
+          <div className="xempty" style={{ marginTop: 40 }}>
+            <div className="ico">🏘</div>
             <div>No hay propiedades con esos filtros</div>
-            <button className="home-filter-clear" onClick={() => { setSearchQuery(''); setActiveFilter('Todo'); setActiveType('Todos'); }}>
-              Ver todas
-            </button>
+            <button className="home-filter-clear" style={{ margin: '12px auto 0', display: 'block' }} onClick={clearFilters}>Ver todas</button>
           </div>
         ) : (
           filtered.map(p => (
@@ -331,17 +429,7 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
         )}
       </div>
 
-      {/* Agent profile modal */}
-      {agentModal && (
-        <AgentProfileModal
-          agent={agentModal}
-          properties={properties}
-          onClose={() => setAgentModal(null)}
-          onContact={() => { setAgentModal(null); }}
-        />
-      )}
-
-      {/* Full-screen story viewer */}
+      {/* Story viewer */}
       {openStory && (
         <div className="story-viewer" onClick={() => setOpenStory(null)}>
           <div className="sv-progress-bar">
@@ -352,12 +440,28 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
             <span className="sv-nm">{openStory.name}</span>
             <button className="sv-close" onClick={() => setOpenStory(null)}>✕</button>
           </div>
-          <div className="sv-content">
-            <div style={{ fontSize: '5rem' }}>🏠</div>
-            <div className="sv-title">Nueva propiedad disponible</div>
-            <div className="sv-sub">Toca para cerrar</div>
+          <div className="sv-content" onClick={e => e.stopPropagation()}>
+            <div style={{ width: 90, height: 90, borderRadius: '50%', background: openStory.grad, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 800, color: '#fff' }}>
+              {openStory.ini}
+            </div>
+            <div className="sv-title">{openStory.name}</div>
+            <div className="sv-sub">🏡 Inmobiliaria · Buenos Aires</div>
           </div>
         </div>
+      )}
+
+      {/* Agent modal */}
+      {agentModal && (
+        <AgentProfileModal
+          agent={agentModal}
+          properties={properties}
+          onClose={() => setAgentModal(null)}
+          onContact={() => {
+            const p = properties.find(x => x.neighborhood === agentModal.neighborhood);
+            if (p) onContactChat(p.id);
+            setAgentModal(null);
+          }}
+        />
       )}
     </div>
   );
