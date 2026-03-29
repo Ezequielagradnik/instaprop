@@ -207,10 +207,30 @@ select.inp{cursor:pointer}
 .trust-response-sm{font-size:.65rem;color:#888;margin-top:1px}
 .hpost-op-badge{position:absolute;top:10px;left:10px;padding:4px 10px;border-radius:50px;font-size:.68rem;font-weight:700;border:1px solid;backdrop-filter:blur(8px)}
 
-/* HOME contact bar (always visible) */
-.hpost-contact-bar{padding:0 14px 14px}
-.hpost-contact-btn{width:100%;padding:11px;border-radius:14px;background:var(--accent);color:#fff;font-weight:700;font-size:.88rem;border:none;cursor:pointer;transition:var(--tr)}.hpost-contact-btn:hover{background:#e02a1a}
+/* HOME contact bar + agent preview */
+.hpost-contact-bar{padding:0 14px 14px;display:flex;align-items:center;gap:10px}
+.hpost-agent-preview{display:flex;align-items:center;gap:8px;flex:1}
+.hpost-contact-btn{padding:11px 18px;border-radius:14px;background:var(--accent);color:#fff;font-weight:700;font-size:.85rem;border:none;cursor:pointer;transition:var(--tr);flex-shrink:0}.hpost-contact-btn:hover{background:#e02a1a}
 .hact-contact{color:var(--accent)!important}
+
+/* INDIVIDUAL AGENT ROW (inside post header) */
+.hpost-agent-row{display:flex;align-items:center;gap:5px;margin-top:3px}
+.hpost-agent-av{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700;color:#fff;flex-shrink:0}
+.hpost-agent-name{font-size:.72rem;font-weight:600;color:#444}
+.hpost-agent-role{font-size:.68rem;color:#aaa}
+
+/* FILTER APPLY / CLEAR BUTTONS */
+.filter-action-row{display:flex;gap:10px;padding:14px 0 4px;margin-top:4px;border-top:1px solid rgba(0,0,0,.07)}
+.filter-apply-btn{flex:1;padding:13px;border-radius:14px;background:var(--accent);color:#fff;font-weight:700;font-size:.9rem;border:none;cursor:pointer;transition:var(--tr)}.filter-apply-btn:hover{background:#e02a1a}
+.filter-clear-btn{padding:13px 18px;border-radius:14px;background:#f0f0f0;color:#555;font-weight:600;font-size:.88rem;border:none;cursor:pointer;transition:var(--tr)}.filter-clear-btn:hover{background:#e8e8e8}
+
+/* STORY TAP HINTS */
+.sv-tap-hint{position:absolute;top:50%;transform:translateY(-50%);font-size:1.8rem;color:rgba(255,255,255,.35);pointer-events:none;z-index:2}
+.sv-tap-left{left:16px}
+.sv-tap-right{right:16px}
+
+/* HOME RESULTS BAR */
+.home-results-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#fff;border-bottom:1px solid rgba(0,0,0,.07);font-size:.8rem;color:#666}
 
 /* Filter active dot */
 .filter-active-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0}

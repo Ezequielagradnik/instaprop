@@ -8,7 +8,6 @@ import Feed from '../../components/Feed';
 import MessagesView, { type OpenChatData } from '../../components/MessagesView';
 import CommunityView from '../../components/CommunityView';
 import ProfileView from '../../components/ProfileView';
-import MapView from '../../components/MapView';
 import type { Property, User, Tab, OperationType } from '../../types';
 
 export default function AppPage() {
@@ -234,7 +233,6 @@ export default function AppPage() {
               </button>
             ))}
           </div>
-          <button className="atop-btn" title="Notificaciones">🔔</button>
           <div className="atop-av" onClick={() => handleNavTap('profile')}>{ini}</div>
         </div>
       </div>
@@ -279,16 +277,6 @@ export default function AppPage() {
 
         {activeTab === 'community' && <CommunityView />}
 
-        {activeTab === 'map' && (
-          <MapView
-            properties={properties}
-            liked={liked}
-            saved={saved}
-            operationType={operationType}
-            onContact={handleContactChat}
-            onSelectProperty={handleSelectProperty}
-          />
-        )}
 
         {activeTab === 'profile' && (
           <ProfileView
@@ -336,13 +324,13 @@ export default function AppPage() {
           </div>
         </button>
 
-        <button className={`ni ${activeTab === 'map' ? 'active' : ''}`} onClick={() => handleNavTap('map')}>
+        <button className={`ni ${activeTab === 'community' ? 'active' : ''}`} onClick={() => handleNavTap('community')}>
           <span className="ni-i">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'map' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
-              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'community' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
           </span>
-          Mapa
+          Comunidad
         </button>
         <button className={`ni ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => handleNavTap('profile')}>
           <span className="ni-i">

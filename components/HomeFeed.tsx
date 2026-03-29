@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useCallback } from 'react';
 import type { Property, OperationType } from '../types';
 import AgentProfileModal, { type AgentInfo } from './AgentProfileModal';
 
 const STORIES = [
-  { id: 1, name: 'Palermo Prop.', grad: 'linear-gradient(135deg,#FF3322,#FF6B5B)', ini: 'PP', seen: false },
-  { id: 2, name: 'Belgrano R.', grad: 'linear-gradient(135deg,#6C5CE7,#A29BFE)', ini: 'BR', seen: false },
-  { id: 3, name: 'Núñez Homes', grad: 'linear-gradient(135deg,#00B09B,#96C93D)', ini: 'NH', seen: true },
-  { id: 4, name: 'Recoleta+', grad: 'linear-gradient(135deg,#F9CA24,#F0932B)', ini: 'R+', seen: false },
-  { id: 5, name: 'VCrespo360', grad: 'linear-gradient(135deg,#2979FF,#00B0FF)', ini: 'VC', seen: true },
-  { id: 6, name: 'Caballito+', grad: 'linear-gradient(135deg,#EB4D4B,#6C5CE7)', ini: 'C+', seen: false },
-  { id: 7, name: 'Saavedra Br.', grad: 'linear-gradient(135deg,#11998e,#38ef7d)', ini: 'SB', seen: true },
+  { id: 1, name: 'Palermo Prop.', grad: 'linear-gradient(135deg,#FF3322,#FF6B5B)', ini: 'PP' },
+  { id: 2, name: 'Belgrano R.', grad: 'linear-gradient(135deg,#6C5CE7,#A29BFE)', ini: 'BR' },
+  { id: 3, name: 'Núñez Homes', grad: 'linear-gradient(135deg,#00B09B,#96C93D)', ini: 'NH' },
+  { id: 4, name: 'Recoleta+', grad: 'linear-gradient(135deg,#F9CA24,#F0932B)', ini: 'R+' },
+  { id: 5, name: 'VCrespo360', grad: 'linear-gradient(135deg,#2979FF,#00B0FF)', ini: 'VC' },
+  { id: 6, name: 'Caballito+', grad: 'linear-gradient(135deg,#EB4D4B,#6C5CE7)', ini: 'C+' },
+  { id: 7, name: 'Saavedra Br.', grad: 'linear-gradient(135deg,#11998e,#38ef7d)', ini: 'SB' },
 ];
 
 export const AGENT_GRADS = [
@@ -23,12 +23,21 @@ export const AGENT_GRADS = [
   'linear-gradient(135deg,#EB4D4B,#6C5CE7)',
 ];
 
+// Individual agents linked to agencies
+const MOCK_AGENTS = [
+  { name: 'Juan Martínez', ini: 'JM', grad: 'linear-gradient(135deg,#667eea,#764ba2)' },
+  { name: 'Sofía Herrera', ini: 'SH', grad: 'linear-gradient(135deg,#f093fb,#f5576c)' },
+  { name: 'Carlos Vega', ini: 'CV', grad: 'linear-gradient(135deg,#4facfe,#00f2fe)' },
+  { name: 'Valentina Cruz', ini: 'VC', grad: 'linear-gradient(135deg,#43e97b,#38f9d7)' },
+  { name: 'Pablo Ríos', ini: 'PR', grad: 'linear-gradient(135deg,#fa709a,#fee140)' },
+  { name: 'Ana Gómez', ini: 'AG', grad: 'linear-gradient(135deg,#a18cd1,#fbc2eb)' },
+];
+
 const ZONES = ['Todo', 'Palermo', 'Belgrano', 'Recoleta', 'Núñez', 'Villa Crespo', 'Caballito', 'Villa Urquiza', 'Almagro'];
 const TYPE_FILTERS = ['Todos', 'Monoamb.', '2 amb', '3 amb', 'Casa', 'PH'];
 const FEATURES_FILTER = ['Cochera', 'Balcón', 'Terraza', 'Pileta', 'Amoblado', 'Mascotas', 'Apto cred.', 'Apto prof.'];
 const RESPONSE_TIMES = ['Responde en 1h', 'Responde rápido', 'Activo hoy', 'Activo esta semana'];
 
-// Recommended profiles to show every ~8 posts
 const RECOMMENDED_PROFILES = [
   { id: 1, name: 'Palermo Prop.', grad: 'linear-gradient(135deg,#FF3322,#FF6B5B)', ini: 'PP', props: 24, followers: '1.2K' },
   { id: 2, name: 'Recoleta+', grad: 'linear-gradient(135deg,#F9CA24,#F0932B)', ini: 'R+', props: 18, followers: '980' },
@@ -37,7 +46,7 @@ const RECOMMENDED_PROFILES = [
   { id: 5, name: 'BelgranoR.', grad: 'linear-gradient(135deg,#6C5CE7,#A29BFE)', ini: 'BR', props: 45, followers: '3.4K' },
 ];
 
-// ── Comments bottom sheet (shared) ────────────────────────────────────────────
+// ── Comments bottom sheet ────────────────────────────────────────────────────
 interface Comment { id: number; user: string; text: string; time?: string }
 
 function CommentsSheet({ onClose }: { onClose: () => void }) {
@@ -96,7 +105,7 @@ function CommentsSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Share sheet ───────────────────────────────────────────────────────────────
+// ── Share sheet ──────────────────────────────────────────────────────────────
 const MOCK_CONTACTS = [
   { id: 1, name: 'Martina R.', ini: 'MR', grad: 'linear-gradient(135deg,#FF6B6B,#EE5A24)' },
   { id: 2, name: 'Lucas F.', ini: 'LF', grad: 'linear-gradient(135deg,#4ECDC4,#44BD32)' },
@@ -107,34 +116,31 @@ const MOCK_CONTACTS = [
 
 function ShareSheet({ address, onClose }: { address: string; onClose: () => void }) {
   const [sent, setSent] = useState<number[]>([]);
-  function sendTo(id: number) {
-    setSent(prev => [...prev, id]);
-  }
   return (
     <div className="comments-sheet-backdrop" onClick={onClose}>
-      <div className="comments-sheet" style={{ height: '50%' }} onClick={e => e.stopPropagation()}>
+      <div className="comments-sheet" style={{ height: '55%' }} onClick={e => e.stopPropagation()}>
         <div className="comments-sheet-handle" />
         <div className="comments-sheet-hdr">
           <span className="comments-sheet-title">Enviar a...</span>
           <button className="comments-sheet-close" onClick={onClose}>✕</button>
         </div>
-        <div className="comments-body" style={{ gap: 8 }}>
+        <div className="comments-body" style={{ gap: 4 }}>
           {MOCK_CONTACTS.map(c => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 42, height: 42, borderRadius: '50%', background: c.grad, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '.8rem', color: '#fff', flexShrink: 0 }}>{c.ini}</div>
                 <span style={{ fontWeight: 600, fontSize: '.9rem', color: '#111' }}>{c.name}</span>
               </div>
               <button
-                onClick={() => sendTo(c.id)}
+                onClick={() => setSent(p => [...p, c.id])}
                 style={{ padding: '7px 16px', borderRadius: 20, fontWeight: 700, fontSize: '.8rem', background: sent.includes(c.id) ? '#f0f0f0' : 'var(--accent)', color: sent.includes(c.id) ? '#888' : '#fff', border: 'none', cursor: 'pointer', transition: 'all .2s' }}
               >
                 {sent.includes(c.id) ? 'Enviado ✓' : 'Enviar'}
               </button>
             </div>
           ))}
-          <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 12, fontSize: '.82rem', color: '#888', textAlign: 'center' }}>
-            Compartiendo: {address}
+          <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 12, fontSize: '.8rem', color: '#aaa', textAlign: 'center' }}>
+            {address}
           </div>
         </div>
       </div>
@@ -142,7 +148,7 @@ function ShareSheet({ address, onClose }: { address: string; onClose: () => void
   );
 }
 
-// ── Recommended profiles row ──────────────────────────────────────────────────
+// ── Recommended profiles row ─────────────────────────────────────────────────
 function RecommendedRow() {
   const [following, setFollowing] = useState<number[]>([]);
   return (
@@ -156,7 +162,7 @@ function RecommendedRow() {
           <div key={p.id} className="rec-profile-card">
             <div className="rec-profile-av" style={{ background: p.grad }}>{p.ini}</div>
             <div className="rec-profile-name">{p.name}</div>
-            <div className="rec-profile-meta">{p.props} propiedades · {p.followers} seg.</div>
+            <div className="rec-profile-meta">{p.props} props · {p.followers}</div>
             <button
               className={`rec-follow-btn ${following.includes(p.id) ? 'ing' : ''}`}
               onClick={() => setFollowing(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id])}
@@ -170,7 +176,7 @@ function RecommendedRow() {
   );
 }
 
-// ── Post ──────────────────────────────────────────────────────────────────────
+// ── Post ─────────────────────────────────────────────────────────────────────
 interface PostProps {
   property: Property;
   liked: boolean;
@@ -179,11 +185,10 @@ interface PostProps {
   onSave: () => void;
   onContact: () => void;
   onAgentClick: (agent: AgentInfo) => void;
-  allProperties: Property[];
   operationType: OperationType;
 }
 
-function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentClick, allProperties, operationType }: PostProps) {
+function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentClick, operationType }: PostProps) {
   const [showComments, setShowComments] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [following, setFollowing] = useState(false);
@@ -198,15 +203,20 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
     `https://picsum.photos/id/${1060 + (p.id * 2) % 60}/1080/1080`,
   ];
 
-  const agentName = p.neighborhood + ' Propiedades';
-  const grad = AGENT_GRADS[p.id % AGENT_GRADS.length];
-  const ini = p.neighborhood.substring(0, 2).toUpperCase();
-  const agent: AgentInfo = { name: agentName, ini, grad, neighborhood: p.neighborhood };
+  // Agency (inmobiliaria)
+  const agencyName = p.neighborhood + ' Propiedades';
+  const agencyGrad = AGENT_GRADS[p.id % AGENT_GRADS.length];
+  const agencyIni = p.neighborhood.substring(0, 2).toUpperCase();
+
+  // Individual agent
+  const agent = MOCK_AGENTS[p.id % MOCK_AGENTS.length];
+
+  const agentInfo: AgentInfo = { name: agencyName, ini: agencyIni, grad: agencyGrad, neighborhood: p.neighborhood };
 
   const responseTime = RESPONSE_TIMES[p.id % RESPONSE_TIMES.length];
   const isVerified = p.verified ?? (p.id % 3 !== 0);
 
-  // Operation-type adapted price label
+  // Price adapted to operation type
   const opLabel = operationType === 'alquiler' ? 'Alquiler' : operationType === 'temporario' ? 'Temporario' : 'Venta';
   const opColor = operationType === 'alquiler' ? '#2979FF' : operationType === 'temporario' ? '#FF9500' : '#00C853';
   const priceLabel = operationType === 'alquiler'
@@ -229,19 +239,25 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
       {showComments && <CommentsSheet onClose={() => setShowComments(false)} />}
       {showShare && <ShareSheet address={p.address} onClose={() => setShowShare(false)} />}
 
-      {/* Header */}
+      {/* Header — agency + individual agent */}
       <div className="hpost-hdr">
         <button
-          style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-          onClick={() => onAgentClick(agent)}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1 }}
+          onClick={() => onAgentClick(agentInfo)}
         >
-          <div className="hpost-av" style={{ background: grad }}>{ini}</div>
+          <div className="hpost-av" style={{ background: agencyGrad }}>{agencyIni}</div>
           <div style={{ textAlign: 'left' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div className="hpost-nm">{agentName}</div>
+              <div className="hpost-nm">{agencyName}</div>
               {isVerified && <span className="trust-verified-sm">✓</span>}
             </div>
             <div className="hpost-loc">📍 {p.neighborhood} · {p.badge}</div>
+            {/* Individual agent linked to agency */}
+            <div className="hpost-agent-row">
+              <div className="hpost-agent-av" style={{ background: agent.grad }}>{agent.ini}</div>
+              <span className="hpost-agent-name">{agent.name}</span>
+              <span className="hpost-agent-role">· Agente</span>
+            </div>
             <div className="trust-response-sm">⚡ {responseTime}</div>
           </div>
         </button>
@@ -287,7 +303,6 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
           </button>
-          {/* Share/send icon (replaces phone) */}
           <button className="hact" onClick={() => setShowShare(true)}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -304,29 +319,23 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
       {/* Info */}
       <div className="hpost-info">
         <div className="hpost-likes">{localLikes.toLocaleString()} me gusta</div>
-        {/* Operation-adapted price */}
         <div className="hpost-price">{priceLabel}</div>
         {operationType === 'temporario' && (
-          <div style={{ fontSize: '.72rem', color: '#888', marginTop: 2 }}>
-            Precio total: {p.price_display} · Mín. 2 noches
-          </div>
+          <div style={{ fontSize: '.72rem', color: '#888', marginTop: 2 }}>Precio total: {p.price_display} · Mín. 2 noches</div>
         )}
         {operationType === 'alquiler' && (
-          <div style={{ fontSize: '.72rem', color: '#888', marginTop: 2 }}>
-            Expensas aprox. USD {Math.round(p.price_usd * 0.08).toLocaleString()}/mes
-          </div>
+          <div style={{ fontSize: '.72rem', color: '#888', marginTop: 2 }}>Expensas aprox. USD {Math.round(p.price_usd * 0.08).toLocaleString()}/mes</div>
         )}
-        <div className="hpost-addr"><strong>{agentName}</strong> 📍 {p.address}</div>
+        <div className="hpost-addr"><strong>{agencyName}</strong> 📍 {p.address}</div>
         {(p.bedrooms || p.area_m2) && (
           <div className="hpost-meta">
-            {p.bedrooms && <span>🛏 {p.bedrooms} ambientes</span>}
+            {p.bedrooms && <span>🛏 {p.bedrooms} amb.</span>}
             {p.area_m2 && <span>📐 {p.area_m2} m²</span>}
           </div>
         )}
         <div className="hpost-tags">
           {p.tags.slice(0, 4).map(t => <span key={t} className="hpost-tag">{t}</span>)}
         </div>
-        {/* Expandable description */}
         {p.description && (
           <div className="hpost-desc-wrap">
             <span className="hpost-desc-text">{descToShow}</span>
@@ -337,15 +346,17 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
             )}
           </div>
         )}
-        <button className="hpost-more" onClick={() => setShowComments(true)}>
-          Ver comentarios
-        </button>
+        <button className="hpost-more" onClick={() => setShowComments(true)}>Ver comentarios</button>
       </div>
 
-      {/* Always-visible contact CTA */}
+      {/* Contact CTA — references individual agent directly */}
       <div className="hpost-contact-bar">
+        <div className="hpost-agent-preview">
+          <div className="hpost-agent-av" style={{ background: agent.grad, width: 28, height: 28, fontSize: '.65rem' }}>{agent.ini}</div>
+          <span style={{ fontSize: '.78rem', color: '#555' }}>Agente: <strong>{agent.name}</strong></span>
+        </div>
         <button className="hpost-contact-btn" onClick={onContact}>
-          💬 Contactar al vendedor
+          💬 Contactar
         </button>
       </div>
     </article>
@@ -365,64 +376,119 @@ interface Props {
   onOperationChange: (op: OperationType) => void;
 }
 
-export default function HomeFeed({ properties, liked, saved, onLike, onSave, onContactChat, scrollRef, operationType, onOperationChange }: Props) {
-  const [seenStories, setSeenStories] = useState<number[]>([3, 5, 7]);
-  const [openStory, setOpenStory] = useState<typeof STORIES[0] | null>(null);
+export default function HomeFeed({ properties, liked, saved, onLike, onSave, onContactChat, scrollRef, operationType }: Props) {
+  const [seenStories, setSeenStories] = useState<number[]>([]);
+  const [storyIdx, setStoryIdx] = useState<number | null>(null);
   const [storyProgress, setStoryProgress] = useState(0);
+  const storyTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [agentModal, setAgentModal] = useState<AgentInfo | null>(null);
+
+  // Filter state: "pending" (being configured) vs "applied" (active on feed)
   const [showFilters, setShowFilters] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeZone, setActiveZone] = useState('Todo');
-  const [activeType, setActiveType] = useState('Todos');
-  const [activeFeatures, setActiveFeatures] = useState<string[]>([]);
-  const [priceMin, setPriceMin] = useState(0);
-  const [priceMax, setPriceMax] = useState(500000);
+  const [pendingSearch, setPendingSearch] = useState('');
+  const [pendingZone, setPendingZone] = useState('Todo');
+  const [pendingType, setPendingType] = useState('Todos');
+  const [pendingFeatures, setPendingFeatures] = useState<string[]>([]);
+  const [pendingPriceMin, setPendingPriceMin] = useState(0);
+  const [pendingPriceMax, setPendingPriceMax] = useState(500000);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  function toggleFeature(f: string) {
-    setActiveFeatures(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
+  // Applied filters (what actually filters the feed)
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [appliedZone, setAppliedZone] = useState('Todo');
+  const [appliedType, setAppliedType] = useState('Todos');
+  const [appliedFeatures, setAppliedFeatures] = useState<string[]>([]);
+  const [appliedPriceMin, setAppliedPriceMin] = useState(0);
+  const [appliedPriceMax, setAppliedPriceMax] = useState(500000);
+
+  const hasApplied = appliedZone !== 'Todo' || appliedType !== 'Todos' || appliedFeatures.length > 0 || !!appliedSearch || appliedPriceMin > 0 || appliedPriceMax < 500000;
+
+  function togglePendingFeature(f: string) {
+    setPendingFeatures(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
   }
 
-  const hasActiveFilters = activeZone !== 'Todo' || activeType !== 'Todos' || activeFeatures.length > 0 || !!searchQuery || priceMin > 0 || priceMax < 500000;
-
-  const filtered = useMemo(() => {
-    return properties.filter(p => {
-      const matchZone = activeZone === 'Todo' || p.neighborhood === activeZone;
-      const matchType = activeType === 'Todos' ||
-        (activeType === 'Monoamb.' && p.type === 'monoambiente') ||
-        (activeType === '2 amb' && p.type === '2amb') ||
-        (activeType === '3 amb' && p.type === '3amb') ||
-        (activeType === 'Casa' && p.type === 'casa') ||
-        (activeType === 'PH' && p.type === 'ph');
-      const matchSearch = !searchQuery || p.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.neighborhood.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchPrice = p.price_usd >= priceMin && p.price_usd <= priceMax;
-      const matchFeatures = activeFeatures.length === 0 || activeFeatures.every(f =>
-        p.tags.some(t => t.toLowerCase().includes(f.toLowerCase()))
-      );
-      return matchZone && matchType && matchSearch && matchPrice && matchFeatures;
-    });
-  }, [properties, activeZone, activeType, searchQuery, priceMin, priceMax, activeFeatures]);
-
-  function handleStory(s: typeof STORIES[0]) {
-    setOpenStory(s);
-    setStoryProgress(0);
-    setSeenStories(prev => prev.includes(s.id) ? prev : [...prev, s.id]);
-    const start = Date.now();
-    const iv = setInterval(() => {
-      const prog = (Date.now() - start) / 5000;
-      setStoryProgress(Math.min(prog, 1));
-      if (prog >= 1) { clearInterval(iv); setOpenStory(null); }
-    }, 50);
+  function applyFilters() {
+    setAppliedSearch(pendingSearch);
+    setAppliedZone(pendingZone);
+    setAppliedType(pendingType);
+    setAppliedFeatures(pendingFeatures);
+    setAppliedPriceMin(pendingPriceMin);
+    setAppliedPriceMax(pendingPriceMax);
+    setShowFilters(false);
   }
 
   function clearFilters() {
-    setSearchQuery(''); setActiveZone('Todo'); setActiveType('Todos');
-    setActiveFeatures([]); setPriceMin(0); setPriceMax(500000);
+    setAppliedSearch(''); setAppliedZone('Todo'); setAppliedType('Todos');
+    setAppliedFeatures([]); setAppliedPriceMin(0); setAppliedPriceMax(500000);
+    setPendingSearch(''); setPendingZone('Todo'); setPendingType('Todos');
+    setPendingFeatures([]); setPendingPriceMin(0); setPendingPriceMax(500000);
+    setShowFilters(false);
   }
 
-  // Build feed items: insert RecommendedRow every 8 posts
+  const filtered = useMemo(() => {
+    return properties.filter(p => {
+      const matchZone = appliedZone === 'Todo' || p.neighborhood === appliedZone;
+      const matchType = appliedType === 'Todos' ||
+        (appliedType === 'Monoamb.' && p.type === 'monoambiente') ||
+        (appliedType === '2 amb' && p.type === '2amb') ||
+        (appliedType === '3 amb' && p.type === '3amb') ||
+        (appliedType === 'Casa' && p.type === 'casa') ||
+        (appliedType === 'PH' && p.type === 'ph');
+      const matchSearch = !appliedSearch ||
+        p.address.toLowerCase().includes(appliedSearch.toLowerCase()) ||
+        p.neighborhood.toLowerCase().includes(appliedSearch.toLowerCase()) ||
+        p.description.toLowerCase().includes(appliedSearch.toLowerCase());
+      const matchPrice = p.price_usd >= appliedPriceMin && p.price_usd <= appliedPriceMax;
+      const matchFeatures = appliedFeatures.length === 0 ||
+        appliedFeatures.every(f => p.tags.some(t => t.toLowerCase().includes(f.toLowerCase())));
+      return matchZone && matchType && matchSearch && matchPrice && matchFeatures;
+    });
+  }, [properties, appliedZone, appliedType, appliedSearch, appliedPriceMin, appliedPriceMax, appliedFeatures]);
+
+  // Story navigation with left/right tap
+  const startStory = useCallback((idx: number) => {
+    if (storyTimerRef.current) clearInterval(storyTimerRef.current);
+    setStoryIdx(idx);
+    setStoryProgress(0);
+    setSeenStories(prev => prev.includes(STORIES[idx].id) ? prev : [...prev, STORIES[idx].id]);
+    const start = Date.now();
+    storyTimerRef.current = setInterval(() => {
+      const prog = (Date.now() - start) / 5000;
+      setStoryProgress(Math.min(prog, 1));
+      if (prog >= 1) {
+        clearInterval(storyTimerRef.current!);
+        // auto-advance to next story
+        const next = idx + 1;
+        if (next < STORIES.length) {
+          startStory(next);
+        } else {
+          setStoryIdx(null);
+        }
+      }
+    }, 50);
+  }, []); // eslint-disable-line
+
+  function handleStoryTap(e: React.MouseEvent) {
+    if (storyIdx === null) return;
+    const x = e.clientX;
+    const half = window.innerWidth / 2;
+    if (x < half) {
+      // Left: previous story
+      if (storyIdx > 0) startStory(storyIdx - 1);
+      else setStoryIdx(null);
+    } else {
+      // Right: next story
+      if (storyIdx < STORIES.length - 1) startStory(storyIdx + 1);
+      else setStoryIdx(null);
+    }
+  }
+
+  function closeStory() {
+    if (storyTimerRef.current) clearInterval(storyTimerRef.current);
+    setStoryIdx(null);
+  }
+
+  // Feed: insert RecommendedRow every 8 posts
   const feedItems = useMemo(() => {
     const items: Array<{ type: 'post'; prop: Property } | { type: 'rec'; key: string }> = [];
     filtered.forEach((prop, i) => {
@@ -432,38 +498,40 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
     return items;
   }, [filtered]);
 
+  const openStory = storyIdx !== null ? STORIES[storyIdx] : null;
+
   return (
     <div className="hv" ref={scrollRef}>
-      {/* Search header */}
+      {/* Search bar */}
       <div className="home-search-bar">
         <div className="home-search-inner" onClick={() => setShowFilters(v => !v)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
-          <span style={{ color: searchQuery ? '#111' : '#aaa', fontSize: '.9rem', flex: 1 }}>
-            {searchQuery || 'Buscar propiedades...'}
+          <span style={{ color: appliedSearch ? '#111' : '#aaa', fontSize: '.9rem', flex: 1 }}>
+            {appliedSearch || 'Buscar propiedades...'}
           </span>
-          {hasActiveFilters && <span className="filter-active-dot" />}
+          {hasApplied && <span className="filter-active-dot" />}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2">
             <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
           </svg>
         </div>
       </div>
 
-      {/* Filters panel */}
+      {/* Filter panel */}
       {showFilters && (
         <div className="home-filters">
-          <input autoFocus className="home-filter-input" placeholder="Buscar por barrio, dirección..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+          <input autoFocus className="home-filter-input" placeholder="Buscar por barrio, dirección..." value={pendingSearch} onChange={e => setPendingSearch(e.target.value)} />
           <div className="home-filter-row">
             <span className="home-filter-label">Zona</span>
             <div className="home-filter-chips">
-              {ZONES.map(f => <button key={f} className={`hfilt ${activeZone === f ? 'act' : ''}`} onClick={() => setActiveZone(f)}>{f}</button>)}
+              {ZONES.map(f => <button key={f} className={`hfilt ${pendingZone === f ? 'act' : ''}`} onClick={() => setPendingZone(f)}>{f}</button>)}
             </div>
           </div>
           <div className="home-filter-row">
             <span className="home-filter-label">Tipo</span>
             <div className="home-filter-chips">
-              {TYPE_FILTERS.map(f => <button key={f} className={`hfilt ${activeType === f ? 'act' : ''}`} onClick={() => setActiveType(f)}>{f}</button>)}
+              {TYPE_FILTERS.map(f => <button key={f} className={`hfilt ${pendingType === f ? 'act' : ''}`} onClick={() => setPendingType(f)}>{f}</button>)}
             </div>
           </div>
           <button className="home-filter-advanced-toggle" onClick={() => setShowAdvanced(v => !v)}>
@@ -474,41 +542,45 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
               <div className="home-filter-row">
                 <span className="home-filter-label">💰 Precio (USD)</span>
                 <div className="hfilt-price-row">
-                  <input className="hfilt-price-inp" type="number" placeholder="Mín" value={priceMin || ''} onChange={e => setPriceMin(+e.target.value || 0)} />
+                  <input className="hfilt-price-inp" type="number" placeholder="Mín" value={pendingPriceMin || ''} onChange={e => setPendingPriceMin(+e.target.value || 0)} />
                   <span style={{ color: '#aaa' }}>—</span>
-                  <input className="hfilt-price-inp" type="number" placeholder="Máx" value={priceMax >= 500000 ? '' : priceMax} onChange={e => setPriceMax(+e.target.value || 500000)} />
+                  <input className="hfilt-price-inp" type="number" placeholder="Máx" value={pendingPriceMax >= 500000 ? '' : pendingPriceMax} onChange={e => setPendingPriceMax(+e.target.value || 500000)} />
                 </div>
               </div>
               <div className="home-filter-row">
                 <span className="home-filter-label">✨ Características</span>
                 <div className="home-filter-chips">
-                  {FEATURES_FILTER.map(f => <button key={f} className={`hfilt ${activeFeatures.includes(f) ? 'act' : ''}`} onClick={() => toggleFeature(f)}>{f}</button>)}
+                  {FEATURES_FILTER.map(f => <button key={f} className={`hfilt ${pendingFeatures.includes(f) ? 'act' : ''}`} onClick={() => togglePendingFeature(f)}>{f}</button>)}
                 </div>
               </div>
               {operationType === 'temporario' && (
                 <div className="home-filter-row">
                   <span className="home-filter-label">📅 Temporario</span>
                   <div className="home-filter-chips">
-                    {['Por noche', 'Por semana', 'WiFi', 'Cocina', 'Ropa de cama', 'Mascotas'].map(f => (
-                      <button key={f} className={`hfilt ${activeFeatures.includes(f) ? 'act' : ''}`} onClick={() => toggleFeature(f)}>{f}</button>
+                    {['WiFi', 'Cocina', 'Ropa de cama', 'Mascotas', 'Por noche', 'Por semana'].map(f => (
+                      <button key={f} className={`hfilt ${pendingFeatures.includes(f) ? 'act' : ''}`} onClick={() => togglePendingFeature(f)}>{f}</button>
                     ))}
                   </div>
                 </div>
               )}
             </>
           )}
-          {hasActiveFilters && (
-            <button className="home-filter-clear" onClick={clearFilters}>
-              Limpiar filtros · {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
+          {/* Apply / Clear buttons */}
+          <div className="filter-action-row">
+            {hasApplied && (
+              <button className="filter-clear-btn" onClick={clearFilters}>Borrar filtros</button>
+            )}
+            <button className="filter-apply-btn" onClick={applyFilters}>
+              Aplicar filtros
             </button>
-          )}
+          </div>
         </div>
       )}
 
       {/* Stories */}
       <div className="stories-strip">
-        {STORIES.map(s => (
-          <button key={s.id} className="story-btn" onClick={() => handleStory(s)}>
+        {STORIES.map((s, i) => (
+          <button key={s.id} className="story-btn" onClick={() => startStory(i)}>
             <div className={`story-ring ${seenStories.includes(s.id) ? 'seen' : ''}`}>
               <div className="story-av" style={{ background: s.grad }}>{s.ini}</div>
             </div>
@@ -518,20 +590,20 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
       </div>
       <div className="stories-divider" />
 
-      {hasActiveFilters && (
+      {hasApplied && (
         <div className="home-results-bar">
-          <span>{filtered.length} propiedad{filtered.length !== 1 ? 'es' : ''} · {operationType === 'venta' ? 'Venta' : operationType === 'alquiler' ? 'Alquiler' : 'Temporario'}</span>
-          <button onClick={clearFilters} style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '.8rem', background: 'none', border: 'none', cursor: 'pointer' }}>Limpiar</button>
+          <span>{filtered.length} propiedad{filtered.length !== 1 ? 'es' : ''} encontrada{filtered.length !== 1 ? 's' : ''}</span>
+          <button onClick={clearFilters} style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '.8rem', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Borrar</button>
         </div>
       )}
 
-      {/* Feed with recommended profiles every 8 posts */}
+      {/* Feed */}
       <div className="hposts">
         {filtered.length === 0 ? (
           <div className="xempty" style={{ marginTop: 40 }}>
             <div className="ico">🏘</div>
             <div>No hay propiedades con esos filtros</div>
-            <button className="home-filter-clear" style={{ margin: '12px auto 0', display: 'block' }} onClick={clearFilters}>Ver todas</button>
+            <button className="filter-clear-btn" style={{ margin: '12px auto 0', display: 'block' }} onClick={clearFilters}>Ver todas</button>
           </div>
         ) : (
           feedItems.map(item =>
@@ -546,23 +618,25 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
                   onSave={() => onSave(item.prop.id)}
                   onContact={() => onContactChat(item.prop.id)}
                   onAgentClick={setAgentModal}
-                  allProperties={properties}
                   operationType={operationType}
                 />
           )
         )}
       </div>
 
-      {/* Story viewer */}
+      {/* Story viewer — tap left/right to navigate */}
       {openStory && (
-        <div className="story-viewer" onClick={() => setOpenStory(null)}>
+        <div className="story-viewer" onClick={handleStoryTap}>
           <div className="sv-progress-bar">
             <div className="sv-progress-fill" style={{ width: `${storyProgress * 100}%` }} />
           </div>
-          <div className="sv-header">
+          {/* Tap zone indicators */}
+          <div className="sv-tap-hint sv-tap-left">‹</div>
+          <div className="sv-tap-hint sv-tap-right">›</div>
+          <div className="sv-header" onClick={e => e.stopPropagation()}>
             <div className="sv-av" style={{ background: openStory.grad }}>{openStory.ini}</div>
             <span className="sv-nm">{openStory.name}</span>
-            <button className="sv-close" onClick={() => setOpenStory(null)}>✕</button>
+            <button className="sv-close" onClick={closeStory}>✕</button>
           </div>
           <div className="sv-content" onClick={e => e.stopPropagation()}>
             <div style={{ width: 90, height: 90, borderRadius: '50%', background: openStory.grad, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 800, color: '#fff' }}>
@@ -570,6 +644,9 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
             </div>
             <div className="sv-title">{openStory.name}</div>
             <div className="sv-sub">🏡 Inmobiliaria · Buenos Aires</div>
+            <div style={{ fontSize: '.8rem', color: 'rgba(255,255,255,.6)', marginTop: 8 }}>
+              {storyIdx !== null ? `${storyIdx + 1} / ${STORIES.length}` : ''}
+            </div>
           </div>
         </div>
       )}
