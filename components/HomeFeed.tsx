@@ -290,26 +290,26 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
         <div className="hpost-op-badge" style={{ background: opColor + '22', color: opColor, borderColor: opColor + '55' }}>{opLabel}</div>
       </div>
 
-      {/* Actions */}
+      {/* Actions — stopPropagation on all to prevent scroll jumps */}
       <div className="hpost-acts">
         <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-          <button className={`hact ${liked ? 'liked' : ''}`} onClick={handleLike}>
+          <button className={`hact ${liked ? 'liked' : ''}`} onClick={e => { e.stopPropagation(); handleLike(); }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill={liked ? '#FF3322' : 'none'} stroke={liked ? '#FF3322' : 'currentColor'} strokeWidth="2">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
           </button>
-          <button className="hact" onClick={() => setShowComments(true)}>
+          <button className="hact" onClick={e => { e.stopPropagation(); setShowComments(true); }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
           </button>
-          <button className="hact" onClick={() => setShowShare(true)}>
+          <button className="hact" onClick={e => { e.stopPropagation(); setShowShare(true); }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
           </button>
         </div>
-        <button className={`hact ${saved ? 'saved' : ''}`} onClick={onSave}>
+        <button className={`hact ${saved ? 'saved' : ''}`} onClick={e => { e.stopPropagation(); onSave(); }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill={saved ? '#2979FF' : 'none'} stroke={saved ? '#2979FF' : 'currentColor'} strokeWidth="2">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
           </svg>
@@ -374,9 +374,11 @@ interface Props {
   scrollRef?: React.RefObject<HTMLDivElement>;
   operationType: OperationType;
   onOperationChange: (op: OperationType) => void;
+  userIni?: string;
+  userGrad?: string;
 }
 
-export default function HomeFeed({ properties, liked, saved, onLike, onSave, onContactChat, scrollRef, operationType }: Props) {
+export default function HomeFeed({ properties, liked, saved, onLike, onSave, onContactChat, scrollRef, operationType, userIni = 'YO', userGrad = 'linear-gradient(135deg,var(--accent),#aa00ff)' }: Props) {
   const [seenStories, setSeenStories] = useState<number[]>([]);
   const [storyIdx, setStoryIdx] = useState<number | null>(null);
   const [storyProgress, setStoryProgress] = useState(0);
@@ -502,83 +504,16 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
 
   return (
     <div className="hv" ref={scrollRef}>
-      {/* Search bar */}
-      <div className="home-search-bar">
-        <div className="home-search-inner" onClick={() => setShowFilters(v => !v)}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
-          <span style={{ color: appliedSearch ? '#111' : '#aaa', fontSize: '.9rem', flex: 1 }}>
-            {appliedSearch || 'Buscar propiedades...'}
-          </span>
-          {hasApplied && <span className="filter-active-dot" />}
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2">
-            <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
-          </svg>
-        </div>
-      </div>
-
-      {/* Filter panel */}
-      {showFilters && (
-        <div className="home-filters">
-          <input autoFocus className="home-filter-input" placeholder="Buscar por barrio, dirección..." value={pendingSearch} onChange={e => setPendingSearch(e.target.value)} />
-          <div className="home-filter-row">
-            <span className="home-filter-label">Zona</span>
-            <div className="home-filter-chips">
-              {ZONES.map(f => <button key={f} className={`hfilt ${pendingZone === f ? 'act' : ''}`} onClick={() => setPendingZone(f)}>{f}</button>)}
-            </div>
-          </div>
-          <div className="home-filter-row">
-            <span className="home-filter-label">Tipo</span>
-            <div className="home-filter-chips">
-              {TYPE_FILTERS.map(f => <button key={f} className={`hfilt ${pendingType === f ? 'act' : ''}`} onClick={() => setPendingType(f)}>{f}</button>)}
-            </div>
-          </div>
-          <button className="home-filter-advanced-toggle" onClick={() => setShowAdvanced(v => !v)}>
-            {showAdvanced ? '▲ Menos filtros' : '▼ Más filtros'}
-          </button>
-          {showAdvanced && (
-            <>
-              <div className="home-filter-row">
-                <span className="home-filter-label">💰 Precio (USD)</span>
-                <div className="hfilt-price-row">
-                  <input className="hfilt-price-inp" type="number" placeholder="Mín" value={pendingPriceMin || ''} onChange={e => setPendingPriceMin(+e.target.value || 0)} />
-                  <span style={{ color: '#aaa' }}>—</span>
-                  <input className="hfilt-price-inp" type="number" placeholder="Máx" value={pendingPriceMax >= 500000 ? '' : pendingPriceMax} onChange={e => setPendingPriceMax(+e.target.value || 500000)} />
-                </div>
-              </div>
-              <div className="home-filter-row">
-                <span className="home-filter-label">✨ Características</span>
-                <div className="home-filter-chips">
-                  {FEATURES_FILTER.map(f => <button key={f} className={`hfilt ${pendingFeatures.includes(f) ? 'act' : ''}`} onClick={() => togglePendingFeature(f)}>{f}</button>)}
-                </div>
-              </div>
-              {operationType === 'temporario' && (
-                <div className="home-filter-row">
-                  <span className="home-filter-label">📅 Temporario</span>
-                  <div className="home-filter-chips">
-                    {['WiFi', 'Cocina', 'Ropa de cama', 'Mascotas', 'Por noche', 'Por semana'].map(f => (
-                      <button key={f} className={`hfilt ${pendingFeatures.includes(f) ? 'act' : ''}`} onClick={() => togglePendingFeature(f)}>{f}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          {/* Apply / Clear buttons */}
-          <div className="filter-action-row">
-            {hasApplied && (
-              <button className="filter-clear-btn" onClick={clearFilters}>Borrar filtros</button>
-            )}
-            <button className="filter-apply-btn" onClick={applyFilters}>
-              Aplicar filtros
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Stories */}
+      {/* Stories — user's own "+" first, then agency stories */}
       <div className="stories-strip">
+        {/* User add-story button */}
+        <button className="story-btn" onClick={() => alert('Próximamente: subir historia')}>
+          <div className="story-ring-add">
+            <div className="story-av" style={{ background: userGrad }}>{userIni}</div>
+            <div className="story-add-plus">+</div>
+          </div>
+          <span className="story-nm">Tu historia</span>
+        </button>
         {STORIES.map((s, i) => (
           <button key={s.id} className="story-btn" onClick={() => startStory(i)}>
             <div className={`story-ring ${seenStories.includes(s.id) ? 'seen' : ''}`}>
@@ -589,13 +524,6 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
         ))}
       </div>
       <div className="stories-divider" />
-
-      {hasApplied && (
-        <div className="home-results-bar">
-          <span>{filtered.length} propiedad{filtered.length !== 1 ? 'es' : ''} encontrada{filtered.length !== 1 ? 's' : ''}</span>
-          <button onClick={clearFilters} style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '.8rem', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Borrar</button>
-        </div>
-      )}
 
       {/* Feed */}
       <div className="hposts">

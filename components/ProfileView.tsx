@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import type { User, Property } from '../types';
+import { useState, useMemo } from 'react';
+import type { User, Property, OperationType } from '../types';
 import { insertProperty, upgradeToSeller } from '../lib/supabase';
 
 interface Props {
   user: User;
-  viewed: number;
   likedCount: number;
   savedCount: number;
   savedProperties: Property[];
+  allProperties?: Property[];
   onLogout: () => void;
   onSavePrefs: (prefs: Record<string, unknown>) => void;
   onSelectProperty: (id: number) => void;
@@ -43,6 +43,127 @@ const FEATURED_STORIES = [
   { id: 2, label: 'Belgrano', img: 'https://picsum.photos/id/1048/200/200' },
   { id: 3, label: 'Recoleta', img: 'https://picsum.photos/id/1080/200/200' },
 ];
+
+// ── Property Search Modal (search lives in profile) ───────────────────────
+const SEARCH_ZONES = ['Palermo', 'Belgrano', 'Recoleta', 'Núñez', 'Villa Crespo', 'Caballito', 'Villa Urquiza', 'Almagro'];
+const SEARCH_TYPES = ['Todos', 'Monoamb.', '2 amb', '3 amb', 'Casa', 'PH'];
+const SEARCH_OPS: { val: OperationType; label: string }[] = [
+  { val: 'venta', label: 'Venta' },
+  { val: 'alquiler', label: 'Alquiler' },
+  { val: 'temporario', label: 'Temporario' },
+];
+
+function PropertySearchModal({ allProperties, onClose, onSelect }: {
+  allProperties: Property[];
+  onClose: () => void;
+  onSelect: (id: number) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [zone, setZone] = useState('');
+  const [type, setType] = useState('Todos');
+  const [op, setOp] = useState<OperationType>('venta');
+  const [priceMin, setPriceMin] = useState(0);
+  const [priceMax, setPriceMax] = useState(500000);
+  const [searched, setSearched] = useState(false);
+
+  const results = useMemo(() => {
+    if (!searched) return [];
+    return allProperties.filter(p => {
+      const matchQ = !query || p.address.toLowerCase().includes(query.toLowerCase()) || p.neighborhood.toLowerCase().includes(query.toLowerCase());
+      const matchZone = !zone || p.neighborhood === zone;
+      const matchType = type === 'Todos' ||
+        (type === 'Monoamb.' && p.type === 'monoambiente') ||
+        (type === '2 amb' && p.type === '2amb') ||
+        (type === '3 amb' && p.type === '3amb') ||
+        (type === 'Casa' && p.type === 'casa') ||
+        (type === 'PH' && p.type === 'ph');
+      const matchPrice = p.price_usd >= priceMin && p.price_usd <= priceMax;
+      return matchQ && matchZone && matchType && matchPrice;
+    });
+  }, [searched, allProperties, query, zone, type, priceMin, priceMax]);
+
+  return (
+    <div className="upgrade-flow">
+      <div className="upgrade-flow-inner">
+        <div className="upgrade-flow-hdr">
+          <button className="agent-back" onClick={onClose}>✕</button>
+          <span style={{ fontFamily: 'Syne', fontWeight: 700 }}>Buscar propiedades</span>
+          <div style={{ width: 36 }} />
+        </div>
+
+        <div className="upgrade-flow-section">
+          <input className="inp" placeholder="Barrio o dirección..." value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+
+        <div className="upgrade-flow-section">
+          <div className="upgrade-section-label">Tipo de operación</div>
+          <div className="home-filter-chips" style={{ marginTop: 6 }}>
+            {SEARCH_OPS.map(o => (
+              <button key={o.val} className={`hfilt ${op === o.val ? 'act' : ''}`} onClick={() => setOp(o.val)}>{o.label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="upgrade-flow-section">
+          <div className="upgrade-section-label">Zona</div>
+          <div className="home-filter-chips" style={{ marginTop: 6 }}>
+            <button className={`hfilt ${zone === '' ? 'act' : ''}`} onClick={() => setZone('')}>Todas</button>
+            {SEARCH_ZONES.map(z => <button key={z} className={`hfilt ${zone === z ? 'act' : ''}`} onClick={() => setZone(z)}>{z}</button>)}
+          </div>
+        </div>
+
+        <div className="upgrade-flow-section">
+          <div className="upgrade-section-label">Tipo de propiedad</div>
+          <div className="home-filter-chips" style={{ marginTop: 6 }}>
+            {SEARCH_TYPES.map(t => <button key={t} className={`hfilt ${type === t ? 'act' : ''}`} onClick={() => setType(t)}>{t}</button>)}
+          </div>
+        </div>
+
+        <div className="upgrade-flow-section">
+          <div className="upgrade-section-label">Precio (USD)</div>
+          <div className="hfilt-price-row" style={{ marginTop: 6 }}>
+            <input className="hfilt-price-inp" type="number" placeholder="Mín" value={priceMin || ''} onChange={e => setPriceMin(+e.target.value || 0)} />
+            <span style={{ color: '#aaa' }}>—</span>
+            <input className="hfilt-price-inp" type="number" placeholder="Máx" value={priceMax >= 500000 ? '' : priceMax} onChange={e => setPriceMax(+e.target.value || 500000)} />
+          </div>
+        </div>
+
+        <button className="btn-p" style={{ width: '100%' }} onClick={() => setSearched(true)}>
+          🔍 Buscar
+        </button>
+
+        {/* Results in list format */}
+        {searched && (
+          <div style={{ marginTop: 16 }}>
+            {results.length === 0 ? (
+              <div className="xempty"><div className="ico">🔍</div><div>Sin resultados</div></div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: '.8rem', color: '#888', marginBottom: 4 }}>{results.length} propiedad{results.length !== 1 ? 'es' : ''} encontrada{results.length !== 1 ? 's' : ''}</div>
+                {results.map(p => (
+                  <div key={p.id} className="search-result-card" onClick={() => { onSelect(p.id); onClose(); }}>
+                    <div className="search-result-img" style={{ backgroundImage: `url('${p.image_url || `https://picsum.photos/id/${1029 + p.id}/400/300`}')` }} />
+                    <div className="search-result-info">
+                      <div className="search-result-price">{p.price_display}</div>
+                      <div className="search-result-addr">📍 {p.address}, {p.neighborhood}</div>
+                      <div className="search-result-meta">
+                        {p.bedrooms && <span>🛏 {p.bedrooms} amb.</span>}
+                        {p.area_m2 && <span>📐 {p.area_m2} m²</span>}
+                      </div>
+                      <div className="search-result-tags">
+                        {p.tags.slice(0, 3).map(t => <span key={t} className="hpost-tag">{t}</span>)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function Toggle({ defaultOn = true }: { defaultOn?: boolean }) {
   const [on, setOn] = useState(defaultOn);
@@ -420,7 +541,7 @@ function FollowListModal({ title, list, onClose }: {
 
 type ProfileTab = 'posts' | 'saved' | 'prefs' | 'activity';
 
-export default function ProfileView({ user, likedCount, savedProperties, onLogout, onSavePrefs, onSelectProperty, onUserUpgrade }: Props) {
+export default function ProfileView({ user, likedCount, savedCount, savedProperties, allProperties = [], onLogout, onSavePrefs, onSelectProperty, onUserUpgrade }: Props) {
   const ini = user.name.substring(0, 2).toUpperCase();
   const isSeller = user.role === 'seller';
   const [activeTab, setActiveTab] = useState<ProfileTab>(isSeller ? 'posts' : 'activity');
@@ -428,6 +549,7 @@ export default function ProfileView({ user, likedCount, savedProperties, onLogou
   const [showSettings, setShowSettings] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [followModal, setFollowModal] = useState<'followers' | 'following' | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
   const [sel, setSel] = useState<Record<string, string[]>>({ zones: [], types: [], rooms: [], features: [] });
   const [budget, setBudget] = useState(200000);
 
@@ -460,6 +582,13 @@ export default function ProfileView({ user, likedCount, savedProperties, onLogou
       )}
       {followModal === 'following' && (
         <FollowListModal title={`${MOCK_FOLLOWING.length} seguidos`} list={MOCK_FOLLOWING} onClose={() => setFollowModal(null)} />
+      )}
+      {showSearch && (
+        <PropertySearchModal
+          allProperties={allProperties}
+          onClose={() => setShowSearch(false)}
+          onSelect={id => { onSelectProperty(id); setShowSearch(false); }}
+        />
       )}
       {showUpgrade && (
         <SellerUpgradeFlow
@@ -534,7 +663,14 @@ export default function ProfileView({ user, likedCount, savedProperties, onLogou
             </button>
           </div>
         ) : (
-          <div style={{ marginTop: 14 }}>
+          <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Search button — search lives here, not in feed */}
+            <button className="profile-search-btn" onClick={() => setShowSearch(true)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              Buscar propiedades
+            </button>
             <button className="upgrade-btn" onClick={() => setShowUpgrade(true)}>
               🏢 Cambiar a cuenta vendedor
             </button>
@@ -586,31 +722,41 @@ export default function ProfileView({ user, likedCount, savedProperties, onLogou
         </div>
       )}
 
-      {/* Saved */}
+      {/* Saved — list view for analysis, not reel consumption */}
       {activeTab === 'saved' && (
-        <div>
+        <div className="saved-list-view">
           {savedProperties.length === 0 ? (
             <div className="xempty">
               <div className="ico">🔖</div>
               <div>No guardaste propiedades todavía</div>
             </div>
           ) : (
-            <div className="saved-grid">
+            <>
+              <div className="saved-list-header">
+                {savedProperties.length} propiedad{savedProperties.length !== 1 ? 'es' : ''} guardada{savedProperties.length !== 1 ? 's' : ''}
+              </div>
               {savedProperties.map(p => (
-                <div key={p.id} className="saved-card" onClick={() => onSelectProperty(p.id)}>
-                  <div className="saved-card-img" style={{
-                    backgroundImage: `url('${p.image_url || `https://picsum.photos/id/${1029 + p.id}/400/400`}')`,
-                  }} />
-                  <div className="saved-card-info">
-                    <div className="saved-card-price">{p.price_display}</div>
-                    <div className="saved-card-addr">{p.address}</div>
-                    <div className="saved-card-tags">
-                      {p.tags.slice(0, 2).map(t => <span key={t}>{t}</span>)}
+                <div key={p.id} className="saved-list-card" onClick={() => onSelectProperty(p.id)}>
+                  <div
+                    className="saved-list-img"
+                    style={{ backgroundImage: `url('${p.image_url || `https://picsum.photos/id/${1029 + p.id}/400/300`}')` }}
+                  />
+                  <div className="saved-list-info">
+                    <div className="saved-list-price">{p.price_display}</div>
+                    <div className="saved-list-addr">📍 {p.address}, {p.neighborhood}</div>
+                    <div className="saved-list-meta">
+                      {p.bedrooms && <span>🛏 {p.bedrooms} amb.</span>}
+                      {p.area_m2 && <span>📐 {p.area_m2} m²</span>}
+                      <span className="saved-list-badge">{p.badge}</span>
                     </div>
+                    <div className="saved-list-tags">
+                      {p.tags.slice(0, 3).map(t => <span key={t} className="hpost-tag">{t}</span>)}
+                    </div>
+                    <div className="saved-list-cta">Ver propiedad →</div>
                   </div>
                 </div>
               ))}
-            </div>
+            </>
           )}
         </div>
       )}

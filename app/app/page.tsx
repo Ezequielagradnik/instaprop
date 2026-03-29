@@ -93,15 +93,16 @@ export default function AppPage() {
 
   const handleNavTap = useCallback((tab: Tab) => {
     const now = Date.now();
-    if (activeTab === tab && now - lastTabTap.current.time < 350) {
-      if (tab === 'home') {
-        homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-        getProperties().then(setProperties);
-        showToast('🔄 Feed actualizado');
-      } else if (tab === 'video') {
-        setFeedIndex(0);
-        showToast('⬆️ Volviste al inicio');
+    const isDoubleTap = activeTab === tab && now - lastTabTap.current.time < 350;
+    // Home: always scroll to top + reload (single or double tap)
+    if (tab === 'home') {
+      homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      if (isDoubleTap || activeTab !== 'home') {
+        getProperties().then(props => { setProperties(props); showToast('🔄 Feed actualizado'); });
       }
+    } else if (isDoubleTap && tab === 'video') {
+      setFeedIndex(0);
+      showToast('⬆️ Volviste al inicio');
     }
     lastTabTap.current = { tab, time: now };
     setActiveTab(tab);
@@ -250,6 +251,8 @@ export default function AppPage() {
             scrollRef={homeScrollRef}
             operationType={operationType}
             onOperationChange={(op) => { setOperationType(op); setFeedIndex(0); }}
+            userIni={ini}
+            userGrad={`linear-gradient(135deg,var(--accent),#aa00ff)`}
           />
         )}
 
@@ -281,10 +284,10 @@ export default function AppPage() {
         {activeTab === 'profile' && (
           <ProfileView
             user={user}
-            viewed={viewed}
             likedCount={liked.length}
             savedCount={saved.length}
             savedProperties={savedProperties}
+            allProperties={properties}
             onLogout={handleLogout}
             onSelectProperty={handleSelectProperty}
             onUserUpgrade={handleUserUpgrade}
