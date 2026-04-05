@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export interface OpenChatData {
   agentName: string;
@@ -123,9 +123,10 @@ function ChatScreen({ chat, initialMsg, onBack }: { chat: Chat; initialMsg?: str
 interface Props {
   openChat?: OpenChatData | null;
   onChatOpened?: () => void;
+  scrollRef?: React.RefObject<HTMLDivElement>;
 }
 
-export default function MessagesView({ openChat, onChatOpened }: Props) {
+export default function MessagesView({ openChat, onChatOpened, scrollRef }: Props) {
   const [chats, setChats] = useState<Chat[]>(BASE_CHATS);
   const [open, setOpen] = useState<{ chat: Chat; initialMsg?: string } | null>(null);
 
@@ -160,7 +161,7 @@ export default function MessagesView({ openChat, onChatOpened }: Props) {
   const totalUnread = chats.reduce((s, c) => s + c.unread, 0);
 
   return (
-    <div className="mv">
+    <div className="mv" ref={scrollRef}>
       <div className="mv-hdr">
         <h2>Mensajes</h2>
         {totalUnread > 0 && <span className="mv-count">{totalUnread} sin leer</span>}

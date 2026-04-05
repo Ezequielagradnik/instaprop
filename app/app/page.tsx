@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getProperties, getSession, signOut } from '../../lib/supabase';
-import HomeFeed, { AGENT_GRADS } from '../../components/HomeFeed';
+import HomeFeed, { MOCK_AGENTS } from '../../components/HomeFeed';
 import Feed from '../../components/Feed';
 import MessagesView, { type OpenChatData } from '../../components/MessagesView';
 import CommunityView from '../../components/CommunityView';
@@ -25,6 +25,8 @@ export default function AppPage() {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastTabTap = useRef<{ tab: Tab; time: number }>({ tab: 'home', time: 0 });
   const homeScrollRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const profileScrollRef = useRef<HTMLDivElement>(null);
 
   // Recommendation: weight properties by viewed/liked/saved interaction
   const scoredProperties = useCallback((props: Property[]) => {
@@ -103,6 +105,10 @@ export default function AppPage() {
     } else if (isDoubleTap && tab === 'video') {
       setFeedIndex(0);
       showToast('⬆️ Volviste al inicio');
+    } else if (isDoubleTap && tab === 'messages') {
+      messagesScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (isDoubleTap && tab === 'profile') {
+      profileScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     }
     lastTabTap.current = { tab, time: now };
     setActiveTab(tab);
@@ -166,10 +172,11 @@ export default function AppPage() {
   const handleContactChat = useCallback((id: number) => {
     const p = properties.find(x => x.id === id);
     if (!p) return;
+    const agent = MOCK_AGENTS[p.id % MOCK_AGENTS.length];
     setOpenChatWith({
-      agentName: p.neighborhood + ' Propiedades',
-      agentIni: p.neighborhood.substring(0, 2).toUpperCase(),
-      agentGrad: AGENT_GRADS[p.id % AGENT_GRADS.length],
+      agentName: agent.name,
+      agentIni: agent.ini,
+      agentGrad: agent.grad,
       propertyAddress: p.address,
     });
     setActiveTab('messages');
@@ -260,6 +267,7 @@ export default function AppPage() {
           <MessagesView
             openChat={openChatWith}
             onChatOpened={() => setOpenChatWith(null)}
+            scrollRef={messagesScrollRef}
           />
         )}
 
@@ -291,6 +299,7 @@ export default function AppPage() {
             onLogout={handleLogout}
             onSelectProperty={handleSelectProperty}
             onUserUpgrade={handleUserUpgrade}
+            scrollRef={profileScrollRef}
             onSavePrefs={prefs => {
               localStorage.setItem('ip_p', JSON.stringify(prefs));
               showToast('✓ Preferencias guardadas');

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { User, Property, OperationType } from '../types';
 import { insertProperty, upgradeToSeller } from '../lib/supabase';
 
@@ -14,6 +14,7 @@ interface Props {
   onSavePrefs: (prefs: Record<string, unknown>) => void;
   onSelectProperty: (id: number) => void;
   onUserUpgrade: (user: User) => void;
+  scrollRef?: React.RefObject<HTMLDivElement>;
 }
 
 const ZONES = ['Palermo', 'Belgrano', 'Recoleta', 'Núñez', 'Villa Crespo', 'Caballito', 'Villa Urquiza', 'Colegiales', 'Saavedra', 'Almagro'];
@@ -541,7 +542,7 @@ function FollowListModal({ title, list, onClose }: {
 
 type ProfileTab = 'posts' | 'saved' | 'prefs' | 'activity';
 
-export default function ProfileView({ user, likedCount, savedCount, savedProperties, allProperties = [], onLogout, onSavePrefs, onSelectProperty, onUserUpgrade }: Props) {
+export default function ProfileView({ user, likedCount, savedCount, savedProperties, allProperties = [], onLogout, onSavePrefs, onSelectProperty, onUserUpgrade, scrollRef }: Props) {
   const ini = user.name.substring(0, 2).toUpperCase();
   const isSeller = user.role === 'seller';
   const [activeTab, setActiveTab] = useState<ProfileTab>(isSeller ? 'posts' : 'activity');
@@ -574,7 +575,7 @@ export default function ProfileView({ user, likedCount, savedCount, savedPropert
   const tabs = isSeller ? sellerTabs : buyerTabs;
 
   return (
-    <div className="pv">
+    <div className="pv" ref={scrollRef}>
       {showUpload && <UploadForm onDone={() => setShowUpload(false)} />}
       {showSettings && <SettingsMenu onClose={() => setShowSettings(false)} onLogout={onLogout} />}
       {followModal === 'followers' && (

@@ -24,7 +24,7 @@ export const AGENT_GRADS = [
 ];
 
 // Individual agents linked to agencies
-const MOCK_AGENTS = [
+export const MOCK_AGENTS = [
   { name: 'Juan Martínez', ini: 'JM', grad: 'linear-gradient(135deg,#667eea,#764ba2)' },
   { name: 'Sofía Herrera', ini: 'SH', grad: 'linear-gradient(135deg,#f093fb,#f5576c)' },
   { name: 'Carlos Vega', ini: 'CV', grad: 'linear-gradient(135deg,#4facfe,#00f2fe)' },
