@@ -28,7 +28,7 @@ function highlight(text: string, query: string) {
   const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
   return parts.map((p, i) =>
     p.toLowerCase() === query.toLowerCase()
-      ? <mark key={i} style={{ background: 'rgba(255,51,34,.15)', color: 'var(--accent)', borderRadius: 3, padding: '0 2px' }}>{p}</mark>
+      ? <mark key={i} style={{ background: 'rgba(26,86,219,.15)', color: 'var(--accent)', borderRadius: 3, padding: '0 2px' }}>{p}</mark>
       : p
   );
 }

@@ -294,7 +294,7 @@ function Post({ property: p, liked, saved, onLike, onSave, onContact, onAgentCli
       <div className="hpost-acts">
         <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
           <button className={`hact ${liked ? 'liked' : ''}`} onClick={e => { e.stopPropagation(); handleLike(); }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill={liked ? '#FF3322' : 'none'} stroke={liked ? '#FF3322' : 'currentColor'} strokeWidth="2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill={liked ? '#1A56DB' : 'none'} stroke={liked ? '#1A56DB' : 'currentColor'} strokeWidth="2">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
           </button>
@@ -383,6 +383,10 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
   const [storyIdx, setStoryIdx] = useState<number | null>(null);
   const [storyProgress, setStoryProgress] = useState(0);
   const storyTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const storyActiveRef = useRef(false);
+  const [svDragY, setSvDragY] = useState(0);
+  const svTouchStartY = useRef(0);
+  const [storyReplyText, setStoryReplyText] = useState('');
   const [agentModal, setAgentModal] = useState<AgentInfo | null>(null);
 
   // Filter state: "pending" (being configured) vs "applied" (active on feed)
@@ -450,20 +454,22 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
   // Story navigation with left/right tap
   const startStory = useCallback((idx: number) => {
     if (storyTimerRef.current) clearInterval(storyTimerRef.current);
+    storyActiveRef.current = true;
     setStoryIdx(idx);
     setStoryProgress(0);
     setSeenStories(prev => prev.includes(STORIES[idx].id) ? prev : [...prev, STORIES[idx].id]);
     const start = Date.now();
     storyTimerRef.current = setInterval(() => {
+      if (!storyActiveRef.current) { clearInterval(storyTimerRef.current!); return; }
       const prog = (Date.now() - start) / 5000;
       setStoryProgress(Math.min(prog, 1));
       if (prog >= 1) {
         clearInterval(storyTimerRef.current!);
-        // auto-advance to next story
         const next = idx + 1;
-        if (next < STORIES.length) {
+        if (next < STORIES.length && storyActiveRef.current) {
           startStory(next);
         } else {
+          storyActiveRef.current = false;
           setStoryIdx(null);
         }
       }
@@ -471,23 +477,39 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
   }, []); // eslint-disable-line
 
   function handleStoryTap(e: React.MouseEvent) {
-    if (storyIdx === null) return;
+    if (storyIdx === null || svDragY > 5) return;
     const x = e.clientX;
     const half = window.innerWidth / 2;
     if (x < half) {
-      // Left: previous story
       if (storyIdx > 0) startStory(storyIdx - 1);
-      else setStoryIdx(null);
+      else closeStory();
     } else {
-      // Right: next story
       if (storyIdx < STORIES.length - 1) startStory(storyIdx + 1);
-      else setStoryIdx(null);
+      else closeStory();
     }
   }
 
   function closeStory() {
+    storyActiveRef.current = false;
     if (storyTimerRef.current) clearInterval(storyTimerRef.current);
     setStoryIdx(null);
+    setSvDragY(0);
+    setStoryReplyText('');
+  }
+
+  function onSvTouchStart(e: React.TouchEvent) {
+    svTouchStartY.current = e.touches[0].clientY;
+  }
+  function onSvTouchMove(e: React.TouchEvent) {
+    const dy = e.touches[0].clientY - svTouchStartY.current;
+    if (dy > 0) {
+      e.stopPropagation();
+      setSvDragY(dy);
+    }
+  }
+  function onSvTouchEnd() {
+    if (svDragY > 80) closeStory();
+    else setSvDragY(0);
   }
 
   // Feed: insert RecommendedRow every 8 posts
@@ -552,13 +574,19 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
         )}
       </div>
 
-      {/* Story viewer — tap left/right to navigate */}
+      {/* Story viewer — tap left/right, swipe down to close */}
       {openStory && (
-        <div className="story-viewer" onClick={handleStoryTap}>
+        <div
+          className="story-viewer"
+          onClick={handleStoryTap}
+          onTouchStart={onSvTouchStart}
+          onTouchMove={onSvTouchMove}
+          onTouchEnd={onSvTouchEnd}
+          style={svDragY > 0 ? { transform: `translateY(${svDragY}px)`, transition: 'none', borderRadius: `${Math.min(svDragY / 3, 20)}px` } : undefined}
+        >
           <div className="sv-progress-bar">
             <div className="sv-progress-fill" style={{ width: `${storyProgress * 100}%` }} />
           </div>
-          {/* Tap zone indicators */}
           <div className="sv-tap-hint sv-tap-left">‹</div>
           <div className="sv-tap-hint sv-tap-right">›</div>
           <div className="sv-header" onClick={e => e.stopPropagation()}>
@@ -575,6 +603,35 @@ export default function HomeFeed({ properties, liked, saved, onLike, onSave, onC
             <div style={{ fontSize: '.8rem', color: 'rgba(255,255,255,.6)', marginTop: 8 }}>
               {storyIdx !== null ? `${storyIdx + 1} / ${STORIES.length}` : ''}
             </div>
+          </div>
+          {/* Reply bar */}
+          <div className="sv-reply-bar" onClick={e => e.stopPropagation()}>
+            <input
+              className="sv-reply-inp"
+              placeholder={`Responder a ${openStory.name}...`}
+              value={storyReplyText}
+              onChange={e => setStoryReplyText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && storyReplyText.trim()) {
+                  const prop = properties[(storyIdx ?? 0) % Math.max(properties.length, 1)];
+                  if (prop) onContactChat(prop.id);
+                  setStoryReplyText('');
+                }
+              }}
+            />
+            <button
+              className="sv-reply-send"
+              onClick={() => {
+                if (!storyReplyText.trim()) return;
+                const prop = properties[(storyIdx ?? 0) % Math.max(properties.length, 1)];
+                if (prop) onContactChat(prop.id);
+                setStoryReplyText('');
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
           </div>
         </div>
       )}
